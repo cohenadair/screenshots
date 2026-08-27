@@ -95,6 +95,33 @@ function tabletStarter(kind: "7" | "10"): Slide[] {
   ];
 }
 
+function macStarter(): Slide[] {
+  return [
+    {
+      id: nid(),
+      layout: "hero",
+      label: en("MEET YOUR APP"),
+      headline: en("Made for\nthe desktop."),
+      screenshot: "",
+    },
+    {
+      id: nid(),
+      layout: "device-bottom",
+      label: en("FEATURE 01"),
+      headline: en("Room to\nfocus."),
+      screenshot: "",
+    },
+    {
+      id: nid(),
+      layout: "device-top",
+      label: en("FEATURE 02"),
+      headline: en("Built for\nyour workflow."),
+      screenshot: "",
+      inverted: true,
+    },
+  ];
+}
+
 function fgStarter(): Slide[] {
   return [
     {
@@ -124,6 +151,7 @@ export const DEFAULT_PROJECT: ProjectState = {
     "android-7": tabletStarter("7"),
     "android-10": tabletStarter("10"),
     "feature-graphic": fgStarter(),
+    macos: macStarter(),
   },
 };
 
@@ -137,6 +165,7 @@ export function newSlide(layout: Slide["layout"] = "device-bottom"): Slide {
   };
 }
 
-export function detectPlatform(device: Device): "ios" | "android" {
+export function detectPlatform(device: Device): "ios" | "android" | "macos" {
+  if (device === "macos") return "macos";
   return device === "iphone" || device === "ipad" ? "ios" : "android";
 }

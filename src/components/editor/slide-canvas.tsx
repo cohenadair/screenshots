@@ -16,13 +16,16 @@ import type {
 import {
   CANVAS,
   IPAD_RATIO,
+  MAC_RATIO,
   MK_RATIO,
   ipadW,
+  macW,
   phoneW,
   phoneWSmall,
   tabletLW,
   tabletPW,
 } from "@/lib/constants";
+import { toAssetUrl } from "@/lib/assets";
 import { toTextElementId } from "@/lib/elements";
 import { img } from "@/lib/image-cache";
 import { pickText, resolveScreenshot } from "@/lib/locale";
@@ -31,6 +34,7 @@ import {
   AndroidTabletL,
   AndroidTabletP,
   IPad,
+  MacWindow,
   Phone,
 } from "./device-frames";
 
@@ -57,6 +61,7 @@ function getFrameAspect(device: Device, orientation: Orientation) {
     case "ipad":        return IPAD_RATIO;
     case "android-7":
     case "android-10":  return orientation === "landscape" ? 8 / 5 : 5 / 8;
+    case "macos":       return MAC_RATIO;
     default:            return 1;
   }
 }
@@ -79,6 +84,8 @@ export function getFrameForDevice(device: Device, orientation: Orientation): {
         return { Comp: AndroidTabletL, widthFn: tabletLW, smallWidthFn: (cW, cH) => tabletLW(cW, cH, 0.5) };
       }
       return { Comp: AndroidTabletP, widthFn: tabletPW, smallWidthFn: (cW, cH) => tabletPW(cW, cH, 0.62) };
+    case "macos":
+      return { Comp: MacWindow, widthFn: macW, smallWidthFn: (cW, cH) => macW(cW, cH, 0.6) };
     default:
       return { Comp: Phone, widthFn: phoneW, smallWidthFn: phoneWSmall };
   }
@@ -98,6 +105,8 @@ type Props = {
   orientation: Orientation;
   theme: Theme;
   locale: string;
+  projectId: string;
+  tenant?: string;
   appName?: string;
   appIcon?: string;
   editable?: boolean;
@@ -125,6 +134,8 @@ type DeckCanvasProps = {
   orientation: Orientation;
   theme: Theme;
   locale: string;
+  projectId: string;
+  tenant?: string;
   appName?: string;
   appIcon?: string;
   connectedCanvas?: boolean;
@@ -499,6 +510,8 @@ export function SlideCanvas({
   orientation,
   theme,
   locale,
+  projectId,
+  tenant,
   appName,
   appIcon,
   editable,
@@ -516,6 +529,7 @@ export function SlideCanvas({
         cW={cW}
         theme={theme}
         locale={locale}
+        projectId={projectId}
         appName={appName}
         appIcon={appIcon}
         editable={editable}
@@ -547,6 +561,8 @@ export function SlideCanvas({
         orientation={orientation}
         theme={theme}
         locale={locale}
+        projectId={projectId}
+        tenant={tenant}
         editable={editable}
         edit={edit}
         selectedElementId={selectedElementId}
@@ -569,6 +585,8 @@ export function DeckCanvas({
   orientation,
   theme,
   locale,
+  projectId,
+  tenant,
   appName,
   appIcon,
   connectedCanvas = true,
@@ -618,6 +636,7 @@ export function DeckCanvas({
                 cW={cW}
                 theme={theme}
                 locale={locale}
+                projectId={projectId}
                 appName={appName}
                 appIcon={appIcon}
                 editable={editable}
@@ -677,6 +696,8 @@ export function DeckCanvas({
             orientation={orientation}
             theme={theme}
             locale={locale}
+            projectId={projectId}
+            tenant={tenant}
             editable={editable}
             edit={perSlideEdit}
             selectedElementId={selectedElementId}
@@ -790,6 +811,7 @@ function FeatureGraphicCanvas({
   cW,
   theme,
   locale,
+  projectId,
   appName,
   appIcon,
   editable,
@@ -799,11 +821,13 @@ function FeatureGraphicCanvas({
   cW: number;
   theme: Theme;
   locale: string;
+  projectId: string;
   appName?: string;
   appIcon?: string;
   editable?: boolean;
   edit?: EditHandlers;
 }) {
+  const resolvedIcon = toAssetUrl(projectId, appIcon);
   return (
     <div
       style={{
@@ -820,9 +844,9 @@ function FeatureGraphicCanvas({
     >
       <Blob cW={cW} color={theme.accent} x={70} y={20} size={50} opacity={0.45} />
       <div style={{ display: "flex", alignItems: "center", gap: cW * 0.03, zIndex: 2 }}>
-        {appIcon && img(appIcon) ? (
+        {resolvedIcon && img(resolvedIcon) ? (
           <img
-            src={img(appIcon)}
+            src={img(resolvedIcon)}
             alt=""
             style={{
               width: cW * 0.13,
@@ -878,6 +902,8 @@ function SlideElements({
   orientation,
   theme,
   locale,
+  projectId,
+  tenant,
   editable,
   edit,
   selectedElementId,
@@ -893,6 +919,8 @@ function SlideElements({
   orientation: Orientation;
   theme: Theme;
   locale: string;
+  projectId: string;
+  tenant?: string;
   editable?: boolean;
   edit?: EditHandlers;
   selectedElementId: ElementId | null;
@@ -903,8 +931,11 @@ function SlideElements({
   boundsH: number;
   allowCrossScreen: boolean;
 }) {
-  const screenshot = resolveScreenshot(slide.screenshot, locale);
-  const screenshotSecondary = resolveScreenshot(slide.screenshotSecondary, locale);
+  const screenshot = toAssetUrl(projectId, resolveScreenshot(slide.screenshot, locale, tenant));
+  const screenshotSecondary = toAssetUrl(
+    projectId,
+    resolveScreenshot(slide.screenshotSecondary, locale, tenant),
+  );
   const { cW, cH, Frame, frameAspect, defaults } = getSlideGeometry(slide, device, orientation);
   const inverted = !!slide.inverted;
   const captionRect = rectFor("caption", slide, defaults);

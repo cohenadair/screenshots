@@ -19,6 +19,8 @@ type Props = {
   orientation: Orientation;
   theme: Theme;
   locale: string;
+  projectId: string;
+  tenant?: string;
   appName?: string;
   appIcon?: string;
   connectedCanvas: boolean;
@@ -39,6 +41,8 @@ export function SlideThumb({
   orientation,
   theme,
   locale,
+  projectId,
+  tenant,
   appName,
   appIcon,
   connectedCanvas,
@@ -114,6 +118,8 @@ export function SlideThumb({
                 orientation={orientation}
                 theme={theme}
                 locale={locale}
+                projectId={projectId}
+                tenant={tenant}
                 appName={appName}
                 appIcon={appIcon}
                 connectedCanvas
@@ -126,6 +132,8 @@ export function SlideThumb({
                 orientation={orientation}
                 theme={theme}
                 locale={locale}
+                projectId={projectId}
+                tenant={tenant}
                 appName={appName}
                 appIcon={appIcon}
                 editable={false}

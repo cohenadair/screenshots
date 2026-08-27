@@ -23,16 +23,23 @@ import {
   supportsLandscape,
 } from "@/lib/constants";
 import { detectPlatform } from "@/lib/defaults";
-import type { Device, Orientation } from "@/lib/types";
+import type { Device, Orientation, Tenant } from "@/lib/types";
+import type { ProjectEntry } from "@/lib/projects";
 
 type Props = {
   appName: string;
   setAppName: (v: string) => void;
+  projects: ProjectEntry[];
+  activeProjectId: string;
+  setActiveProjectId: (v: string) => void;
   connectedCanvas: boolean;
   setConnectedCanvas: (v: boolean) => void;
   locale: string;
   setLocale: (v: string) => void;
   locales: string[];
+  tenants: Tenant[];
+  tenant: string;
+  setTenant: (v: string) => void;
   device: Device;
   setDevice: (v: Device) => void;
   orientation: Orientation;
@@ -51,21 +58,46 @@ export function Toolbar(props: Props) {
   const hasLandscape = supportsLandscape(props.device);
   const [resetOpen, setResetOpen] = React.useState(false);
 
-  // Track last device per platform so iOS/Android tabs preserve user's choice.
-  const lastByPlatform = React.useRef<{ ios: Device; android: Device }>({
+  // Track last device per platform so iOS/Android/Mac tabs preserve user's choice.
+  const lastByPlatform = React.useRef<{ ios: Device; android: Device; macos: Device }>({
     ios: platform === "ios" ? props.device : "iphone",
     android: platform === "android" ? props.device : "android",
+    macos: platform === "macos" ? props.device : "macos",
   });
   React.useEffect(() => {
     lastByPlatform.current[platform] = props.device;
   }, [platform, props.device]);
 
   const showLocale = props.locales.length > 1;
+  const showTenant = props.tenants.length > 1;
+  const showProjects = props.projects.length > 1;
 
   const deviceLabel = DEVICE_LABEL[props.device];
 
   return (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b bg-card/40 px-4 py-2">
+      {showProjects && (
+        <>
+          <Select
+            value={props.activeProjectId}
+            onValueChange={props.setActiveProjectId}
+            disabled={props.busy}
+          >
+            <SelectTrigger className="h-8 w-36 text-xs">
+              <SelectValue placeholder="Project" />
+            </SelectTrigger>
+            <SelectContent>
+              {props.projects.map((p) => (
+                <SelectItem key={p.id} value={p.id}>
+                  {p.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <span aria-hidden className="mx-1 h-5 w-px bg-border" />
+        </>
+      )}
+
       <Input
         value={props.appName}
         onChange={(e) => props.setAppName(e.target.value)}
@@ -102,7 +134,12 @@ export function Toolbar(props: Props) {
         value={platform}
         onValueChange={(p) => {
           if (props.busy) return;
-          const next = p === "ios" ? lastByPlatform.current.ios : lastByPlatform.current.android;
+          const next =
+            p === "ios"
+              ? lastByPlatform.current.ios
+              : p === "android"
+                ? lastByPlatform.current.android
+                : lastByPlatform.current.macos;
           props.setDevice(next);
         }}
       >
@@ -112,6 +149,9 @@ export function Toolbar(props: Props) {
           </TabsTrigger>
           <TabsTrigger value="android" className="h-7 px-3 text-xs" disabled={props.busy}>
             Android
+          </TabsTrigger>
+          <TabsTrigger value="macos" className="h-7 px-3 text-xs" disabled={props.busy}>
+            Mac
           </TabsTrigger>
         </TabsList>
       </Tabs>
@@ -130,13 +170,15 @@ export function Toolbar(props: Props) {
               <SelectItem value="iphone">{DEVICE_LABEL.iphone}</SelectItem>
               <SelectItem value="ipad">{DEVICE_LABEL.ipad}</SelectItem>
             </>
-          ) : (
+          ) : platform === "android" ? (
             <>
               <SelectItem value="android">{DEVICE_LABEL.android}</SelectItem>
               <SelectItem value="android-7">{DEVICE_LABEL["android-7"]}</SelectItem>
               <SelectItem value="android-10">{DEVICE_LABEL["android-10"]}</SelectItem>
               <SelectItem value="feature-graphic">{DEVICE_LABEL["feature-graphic"]}</SelectItem>
             </>
+          ) : (
+            <SelectItem value="macos">{DEVICE_LABEL.macos}</SelectItem>
           )}
         </SelectContent>
       </Select>
@@ -166,6 +208,21 @@ export function Toolbar(props: Props) {
             {props.locales.map((l) => (
               <SelectItem key={l} value={l}>
                 {l.toUpperCase()}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+
+      {showTenant && (
+        <Select value={props.tenant} onValueChange={props.setTenant} disabled={props.busy}>
+          <SelectTrigger className="h-8 w-32 text-xs">
+            <SelectValue placeholder="Tenant" />
+          </SelectTrigger>
+          <SelectContent>
+            {props.tenants.map((t) => (
+              <SelectItem key={t.id} value={t.id}>
+                {t.name}
               </SelectItem>
             ))}
           </SelectContent>

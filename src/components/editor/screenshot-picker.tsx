@@ -2,6 +2,7 @@
 import * as React from "react";
 import { Image as ImageIcon, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toAssetUrl } from "@/lib/assets";
 import { didFail, img, setImage } from "@/lib/image-cache";
 import { resolveScreenshot } from "@/lib/locale";
 
@@ -9,6 +10,8 @@ type Props = {
   label: string;
   value: string;
   locale?: string;
+  projectId: string;
+  tenant?: string;
   onChange: (v: string) => void;
 };
 
@@ -23,9 +26,9 @@ async function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
-async function uploadDataUrl(dataUrl: string): Promise<string | null> {
+async function uploadDataUrl(projectId: string, dataUrl: string): Promise<string | null> {
   try {
-    const resp = await fetch("/api/upload", {
+    const resp = await fetch(`/api/upload?project=${encodeURIComponent(projectId)}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ dataUrl }),
@@ -38,7 +41,7 @@ async function uploadDataUrl(dataUrl: string): Promise<string | null> {
   }
 }
 
-export function ScreenshotPicker({ label, value, locale, onChange }: Props) {
+export function ScreenshotPicker({ label, value, locale, projectId, tenant, onChange }: Props) {
   const inputRef = React.useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -69,7 +72,7 @@ export function ScreenshotPicker({ label, value, locale, onChange }: Props) {
     // If the upload endpoint is unreachable (e.g. static export), fall back
     // to the inline data URI — still works in the current session.
     setUploading(true);
-    const uploadedPath = await uploadDataUrl(dataUrl);
+    const uploadedPath = await uploadDataUrl(projectId, dataUrl);
     setUploading(false);
     if (uploadedPath) {
       setImage(uploadedPath, dataUrl);
@@ -82,7 +85,9 @@ export function ScreenshotPicker({ label, value, locale, onChange }: Props) {
 
   const hasValue = !!value;
   const isData = hasValue && value.startsWith("data:");
-  const resolvedValue = hasValue && !isData && locale ? resolveScreenshot(value, locale) : value;
+  const resolvedValue = hasValue && !isData
+    ? toAssetUrl(projectId, resolveScreenshot(value, locale ?? "en", tenant))
+    : value;
   const previewSrc = isData ? value : hasValue ? img(resolvedValue) : "";
   // Only flag "image not found" when the path is a real URL that we tried and failed.
   const knownMissing = hasValue && !isData && didFail(resolvedValue);

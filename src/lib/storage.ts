@@ -112,13 +112,23 @@ function mergeWithDefaults(parsed: Partial<ProjectState>): ProjectState {
   if (!merged.locales.includes(merged.locale)) {
     merged.locale = merged.locales[0];
   }
+  // Same clamp for tenants — most projects define none, which is the signal
+  // to hide the tenant UI entirely (see Toolbar).
+  merged.tenants = Array.isArray(parsed.tenants) ? parsed.tenants : [];
+  if (merged.tenants.length > 0 && !merged.tenants.some((t) => t.id === merged.tenant)) {
+    merged.tenant = merged.tenants[0].id;
+  }
   return merged;
 }
 
-function loadFromLocalStorage(): ProjectState | null {
+function localStorageKey(projectId: string): string {
+  return `${STORAGE_KEY}:${projectId}`;
+}
+
+function loadFromLocalStorage(projectId: string): ProjectState | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = window.localStorage.getItem(localStorageKey(projectId));
     if (!raw) return null;
     return mergeWithDefaults(JSON.parse(raw) as Partial<ProjectState>);
   } catch {
@@ -126,12 +136,14 @@ function loadFromLocalStorage(): ProjectState | null {
   }
 }
 
-async function loadFromFile(): Promise<
-  { ok: true; state: ProjectState | null } | { ok: false; error: string }
-> {
+async function loadFromFile(
+  projectId: string,
+): Promise<{ ok: true; state: ProjectState | null } | { ok: false; error: string }> {
   if (typeof window === "undefined") return { ok: false, error: "Window is not available" };
   try {
-    const resp = await fetch("/api/project", { cache: "no-store" });
+    const resp = await fetch(`/api/project?project=${encodeURIComponent(projectId)}`, {
+      cache: "no-store",
+    });
     if (!resp.ok) return { ok: false, error: `HTTP ${resp.status}` };
     const json = (await resp.json()) as { ok: boolean; state: Partial<ProjectState> | null };
     if (!json.ok) return { ok: false, error: "Project response was not ok" };
@@ -142,10 +154,13 @@ async function loadFromFile(): Promise<
   }
 }
 
-function saveToLocalStorage(state: ProjectState): { ok: true } | { ok: false; error: string } {
+function saveToLocalStorage(
+  projectId: string,
+  state: ProjectState,
+): { ok: true } | { ok: false; error: string } {
   if (typeof window === "undefined") return { ok: true };
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    window.localStorage.setItem(localStorageKey(projectId), JSON.stringify(state));
     return { ok: true };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -153,10 +168,13 @@ function saveToLocalStorage(state: ProjectState): { ok: true } | { ok: false; er
   }
 }
 
-async function saveToFile(state: ProjectState): Promise<{ ok: true } | { ok: false; error: string }> {
+async function saveToFile(
+  projectId: string,
+  state: ProjectState,
+): Promise<{ ok: true } | { ok: false; error: string }> {
   if (typeof window === "undefined") return { ok: true };
   try {
-    const resp = await fetch("/api/project", {
+    const resp = await fetch(`/api/project?project=${encodeURIComponent(projectId)}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(state),
@@ -178,7 +196,7 @@ function applyUpdater(updater: Updater, prev: ProjectState): ProjectState {
   return typeof updater === "function" ? updater(prev) : updater;
 }
 
-export function useProject() {
+export function useProject(projectId: string) {
   const [state, _setState] = useState<ProjectState>(DEFAULT_PROJECT);
   const [hydrated, setHydrated] = useState(false);
   const [fileReady, setFileReady] = useState(false);
@@ -193,44 +211,52 @@ export function useProject() {
   const lastPushAt = useRef(0);
 
   // Hydrate: prefer file (git-tracked) → localStorage (cache) → defaults.
-  // localStorage is consulted first for instant paint, then file overwrites if present.
+  // localStorage is consulted first for instant paint, then file overwrites if
+  // present. Re-runs whenever the active project changes (project picker).
   useEffect(() => {
+    // Empty projectId means the active project hasn't been resolved yet
+    // (see the picker bootstrap in ScreenshotEditor) — stay in the
+    // "not hydrated" loading state until a real id arrives.
+    if (!projectId) return;
+
     let cancelled = false;
-    const cached = loadFromLocalStorage();
-    if (cached) _setState(cached);
+    // Block autosave immediately so a project switch can't write the
+    // previous project's in-memory state into the new project's file before
+    // this effect's own load completes.
+    setHydrated(false);
+    setFileReady(false);
+    pastRef.current = [];
+    futureRef.current = [];
+    lastPushAt.current = 0;
+
+    const cached = loadFromLocalStorage(projectId);
+    _setState(cached || DEFAULT_PROJECT);
 
     void (async () => {
-      const fromFile = await loadFromFile();
+      const fromFile = await loadFromFile(projectId);
       if (cancelled) return;
       if (fromFile.ok) {
-        if (fromFile.state) {
-          _setState(fromFile.state);
-        } else {
-          _setState(DEFAULT_PROJECT);
-        }
+        _setState(fromFile.state || DEFAULT_PROJECT);
         setFileReady(true);
       } else {
         setFileReady(false);
         setSaveError(fromFile.error);
       }
-      pastRef.current = [];
-      futureRef.current = [];
-      lastPushAt.current = 0;
       setHydrated(true);
     })();
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [projectId]);
 
   // Debounced autosave to BOTH localStorage (fast, offline) and file (git-trackable).
   useEffect(() => {
     if (!hydrated || !fileReady) return;
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
-      const localResult = saveToLocalStorage(state);
-      void saveToFile(state).then((fileResult) => {
+      const localResult = saveToLocalStorage(projectId, state);
+      void saveToFile(projectId, state).then((fileResult) => {
         if (fileResult.ok && localResult.ok) {
           setSavedAt(Date.now());
           setSaveError(null);
@@ -249,7 +275,7 @@ export function useProject() {
     return () => {
       if (timer.current) clearTimeout(timer.current);
     };
-  }, [state, hydrated, fileReady]);
+  }, [state, hydrated, fileReady, projectId]);
 
   const setState = useCallback((updater: Updater) => {
     _setState((prev) => {

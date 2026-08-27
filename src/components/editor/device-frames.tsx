@@ -235,6 +235,38 @@ export function IPad({ src, alt = "", style, hideEmpty }: FrameProps) {
   );
 }
 
+// macOS — bare screenshot (drop shadow + subtle rounded corners), no
+// synthetic title bar. Source screenshots are expected to already carry
+// real macOS window chrome, so drawing another one would double up.
+export function MacWindow({ src, alt = "", style, hideEmpty }: FrameProps) {
+  const resolved = img(src);
+  return (
+    <div style={{ position: "relative", aspectRatio: "16 / 10", ...style }}>
+      <div
+        style={{
+          width: "100%",
+          height: "100%",
+          borderRadius: "1.4%",
+          overflow: "hidden",
+          background: "#000",
+          boxShadow: "0 24px 64px rgba(0,0,0,0.35)",
+        }}
+      >
+        {resolved ? (
+          <img
+            src={resolved}
+            alt={alt}
+            style={{ display: "block", width: "100%", height: "100%", objectFit: "cover", objectPosition: "top" }}
+            draggable={false}
+          />
+        ) : hideEmpty ? null : (
+          <EmptySlot />
+        )}
+      </div>
+    </div>
+  );
+}
+
 function EmptySlot() {
   return (
     <div

@@ -4,11 +4,12 @@ export type Device =
   | "android"
   | "android-7"
   | "android-10"
-  | "feature-graphic";
+  | "feature-graphic"
+  | "macos";
 
 export type Orientation = "portrait" | "landscape";
 
-export type Platform = "ios" | "android";
+export type Platform = "ios" | "android" | "macos";
 
 // Layouts the editor can render. Vary across slides for visual rhythm.
 export type SlideLayout =
@@ -60,8 +61,8 @@ export type Slide = {
   layout: SlideLayout;
   label: LocalizedText;       // tiny uppercase caption above headline, per locale
   headline: LocalizedText;    // multi-line; newlines are intentional, per locale
-  screenshot: string;         // path under /screenshots/ — may contain {locale}
-  screenshotSecondary?: string; // for two-devices layout — may contain {locale}
+  screenshot: string;         // path relative to the project's asset root — may contain {locale}/{tenant}
+  screenshotSecondary?: string; // for two-devices layout — may contain {locale}/{tenant}
   inverted?: boolean;         // dark background variant
   orientationFilter?: "portrait" | "landscape"; // if set, slide only shows for that orientation
   // Per-element overrides; when present, replaces layout default placement.
@@ -87,6 +88,20 @@ export type Theme = {
   muted: string;
 };
 
+// Reskin-only tenant support (e.g. Pro IQ's white-label builds): a tenant may
+// override background/accent colors and swap screenshots via a `{tenant}`
+// path token, but shares the project's headlines/layout/theme structure.
+// Absent/empty `tenants` on a project means no tenant UI at all.
+export type TenantColorOverride = Partial<
+  Pick<Theme, "accent" | "bg" | "bgAlt" | "fg" | "fgAlt" | "muted">
+>;
+
+export type Tenant = {
+  id: string;
+  name: string;
+  colors?: TenantColorOverride;
+};
+
 export type ProjectState = {
   schemaVersion?: number;
   appName: string;
@@ -101,5 +116,8 @@ export type ProjectState = {
   orientation: Orientation;
   // Per-device slide decks so platform switching preserves work
   slidesByDevice: Record<Device, Slide[]>;
-  appIcon?: string;    // path under /public (e.g. /app-icon.png)
+  appIcon?: string;    // path relative to the project's asset root (e.g. app-icon.png)
+  // White-label tenants (reskin-only). Absent/empty hides the tenant UI.
+  tenants?: Tenant[];
+  tenant?: string;
 };

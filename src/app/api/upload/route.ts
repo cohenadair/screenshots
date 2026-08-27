@@ -2,11 +2,9 @@ import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { NextResponse } from "next/server";
+import { resolveProjectRoot } from "@/lib/projects";
 
 export const dynamic = "force-dynamic";
-
-const UPLOAD_DIR_REL = path.join("public", "screenshots", "uploaded");
-const PUBLIC_PREFIX = "/screenshots/uploaded";
 
 const MIME_EXT: Record<string, string> = {
   "image/png": "png",
@@ -23,6 +21,11 @@ function parseDataUrl(dataUrl: string): { mime: string; bytes: Buffer } | null {
 }
 
 export async function POST(req: Request) {
+  const projectId = new URL(req.url).searchParams.get("project");
+  if (!projectId) {
+    return NextResponse.json({ ok: false, error: "Missing project" }, { status: 400 });
+  }
+
   let body: { dataUrl?: string };
   try {
     body = (await req.json()) as { dataUrl?: string };
@@ -49,17 +52,21 @@ export async function POST(req: Request) {
 
   const hash = createHash("sha1").update(parsed.bytes).digest("hex").slice(0, 16);
   const filename = `${hash}.${ext}`;
-  const absDir = path.join(process.cwd(), UPLOAD_DIR_REL);
-  const absFile = path.join(absDir, filename);
 
   try {
+    const root = await resolveProjectRoot(projectId);
+    const absDir = path.join(root, "screenshots", "uploaded");
+    const absFile = path.join(absDir, filename);
     await fs.mkdir(absDir, { recursive: true });
     try {
       await fs.access(absFile);
     } catch {
       await fs.writeFile(absFile, parsed.bytes);
     }
-    return NextResponse.json({ ok: true, path: `${PUBLIC_PREFIX}/${filename}` });
+    return NextResponse.json({
+      ok: true,
+      path: `/api/asset/${projectId}/screenshots/uploaded/${filename}`,
+    });
   } catch (e) {
     return NextResponse.json(
       { ok: false, error: e instanceof Error ? e.message : String(e) },

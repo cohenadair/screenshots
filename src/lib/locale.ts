@@ -19,13 +19,20 @@ export function pickText(field: LocalizedText | undefined, locale: string): stri
   return "";
 }
 
-// Replace `{locale}` placeholders in a screenshot path. Data URLs and empty
-// strings pass through unchanged.
-export function resolveScreenshot(path: string | undefined, locale: string): string {
+// Replace `{locale}`/`{tenant}` placeholders in a screenshot path. Data URLs
+// and empty strings pass through unchanged. `tenant` is optional — projects
+// with no tenants (the common case) never have a `{tenant}` token to resolve.
+export function resolveScreenshot(
+  path: string | undefined,
+  locale: string,
+  tenant?: string,
+): string {
   if (!path) return "";
   if (path.startsWith("data:")) return path;
-  if (!path.includes("{locale}")) return path;
-  return path.replace(/\{locale\}/g, locale);
+  let out = path;
+  if (out.includes("{locale}")) out = out.replace(/\{locale\}/g, locale);
+  if (tenant && out.includes("{tenant}")) out = out.replace(/\{tenant\}/g, tenant);
+  return out;
 }
 
 // Convert legacy `string` headline/label fields to the per-locale shape. Safe

@@ -2,17 +2,21 @@
 import * as React from "react";
 import JSZip from "jszip";
 import { toPng } from "html-to-image";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Toaster, toast } from "sonner";
+import { toAssetUrl } from "@/lib/assets";
 import {
+  LAST_PROJECT_STORAGE_KEY,
   getExportSizes,
   hasTheme,
+  resolveTheme,
   supportsLandscape,
-  themeById,
 } from "@/lib/constants";
 import { detectPlatform, nid } from "@/lib/defaults";
 import { isBuiltInElementId, isTextElementId, textElementKey } from "@/lib/elements";
 import { preloadImages } from "@/lib/image-cache";
 import { resolveScreenshot, writeLocalized } from "@/lib/locale";
+import type { ProjectEntry } from "@/lib/projects";
 import { useProject } from "@/lib/storage";
 import type {
   BuiltInElementId,
@@ -28,8 +32,69 @@ import { Sidebar } from "./sidebar";
 import { DeckCanvas, getCanvas } from "./slide-canvas";
 import { Toolbar } from "./toolbar";
 
+// Resolves which registered project is active from the `?project=` URL
+// query param — the source of truth so the URL stays bookmarkable and two
+// tabs can independently edit two projects. On a bare load (no query param),
+// falls back to the last-used project from localStorage, then the first
+// registered project, and normalizes the URL via router.replace.
+function useActiveProject(): {
+  projectId: string;
+  projects: ProjectEntry[];
+  setActiveProjectId: (id: string) => void;
+} {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [projects, setProjects] = React.useState<ProjectEntry[]>([]);
+  const projectId = searchParams.get("project") || "";
+
+  React.useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const resp = await fetch("/api/projects", { cache: "no-store" });
+        const json = (await resp.json()) as { ok: boolean; projects?: ProjectEntry[] };
+        if (cancelled || !json.ok || !json.projects) return;
+        setProjects(json.projects);
+        if (!projectId) {
+          const last = window.localStorage.getItem(LAST_PROJECT_STORAGE_KEY);
+          const fallback =
+            (last && json.projects.some((p) => p.id === last) ? last : null) ||
+            json.projects[0]?.id;
+          if (fallback) {
+            const params = new URLSearchParams(window.location.search);
+            params.set("project", fallback);
+            router.replace(`?${params.toString()}`);
+          }
+        }
+      } catch {
+        // Registry unreachable — the loading screen stays up; nothing else to do.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // Re-fetch is unnecessary once projects are loaded; only the initial
+    // bare-load bootstrap needs projectId as a guard.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const setActiveProjectId = React.useCallback(
+    (id: string) => {
+      window.localStorage.setItem(LAST_PROJECT_STORAGE_KEY, id);
+      const params = new URLSearchParams(window.location.search);
+      params.set("project", id);
+      router.push(`?${params.toString()}`);
+    },
+    [router],
+  );
+
+  return { projectId, projects, setActiveProjectId };
+}
+
 export function ScreenshotEditor() {
-  const { state, setState, hydrated, savedAt, saveError, reset, resetDevice, undo, redo } = useProject();
+  const { projectId, projects, setActiveProjectId } = useActiveProject();
+  const { state, setState, hydrated, savedAt, saveError, reset, resetDevice, undo, redo } =
+    useProject(projectId);
   const [activeSlideId, setActiveSlideId] = React.useState<string | null>(null);
   const [selectedElement, setSelectedElement] = React.useState<SelectedElement | null>(null);
   const [exporting, setExporting] = React.useState<string | null>(null);
@@ -38,12 +103,19 @@ export function ScreenshotEditor() {
   const [exportSlideIndex, setExportSlideIndex] = React.useState(0);
   const exportRef = React.useRef<HTMLDivElement | null>(null);
 
+  // Clear screen/element selection when switching projects — stale ids from
+  // the previous project's slide deck don't carry over.
+  React.useEffect(() => {
+    setActiveSlideId(null);
+    setSelectedElement(null);
+  }, [projectId]);
+
   const currentSlides = (state.slidesByDevice[state.device] || []).filter(
     (s) => !s.orientationFilter || s.orientationFilter === state.orientation,
   );
   const activeSlide =
     currentSlides.find((s) => s.id === activeSlideId) || currentSlides[0] || null;
-  const theme = themeById(state.themeId);
+  const theme = resolveTheme(state.themeId, state.tenants, state.tenant);
 
   React.useEffect(() => {
     if (selectedElement && selectedElement.slideId !== activeSlide?.id) {
@@ -75,22 +147,28 @@ export function ScreenshotEditor() {
 
   const assetPaths = React.useMemo(() => {
     const paths = new Set<string>();
+    // Bundled with the tool itself — always served statically, not per-project.
     paths.add("/mockup.png");
-    if (state.appIcon) paths.add(state.appIcon);
-    // Preload every locale variant so bulk export doesn't race image loads.
+    if (state.appIcon) paths.add(toAssetUrl(projectId, state.appIcon));
+    // Preload every locale × tenant variant so bulk export doesn't race image loads.
+    const tenantIds = state.tenants && state.tenants.length > 0 ? state.tenants.map((t) => t.id) : [undefined];
     const allSlides: Slide[] = Object.values(state.slidesByDevice).flat();
     for (const s of allSlides) {
       for (const raw of [s.screenshot, s.screenshotSecondary]) {
         if (!raw || raw.startsWith("data:")) continue;
-        if (raw.includes("{locale}")) {
-          for (const loc of state.locales) paths.add(resolveScreenshot(raw, loc));
-        } else {
-          paths.add(raw);
+        for (const tenantId of tenantIds) {
+          if (raw.includes("{locale}")) {
+            for (const loc of state.locales) {
+              paths.add(toAssetUrl(projectId, resolveScreenshot(raw, loc, tenantId)));
+            }
+          } else {
+            paths.add(toAssetUrl(projectId, resolveScreenshot(raw, state.locale, tenantId)));
+          }
         }
       }
     }
     return Array.from(paths).sort();
-  }, [state.slidesByDevice, state.appIcon, state.locales]);
+  }, [state.slidesByDevice, state.appIcon, state.locales, state.locale, state.tenants, projectId]);
   const assetSig = assetPaths.join("|");
 
   React.useEffect(() => {
@@ -582,11 +660,17 @@ export function ScreenshotEditor() {
       <Toolbar
         appName={state.appName}
         setAppName={(v) => setState((p) => ({ ...p, appName: v }))}
+        projects={projects}
+        activeProjectId={projectId}
+        setActiveProjectId={setActiveProjectId}
         connectedCanvas={state.connectedCanvas}
         setConnectedCanvas={(v) => setState((p) => ({ ...p, connectedCanvas: v }))}
         locale={state.locale}
         setLocale={(v) => setState((p) => ({ ...p, locale: v }))}
         locales={state.locales}
+        tenants={state.tenants || []}
+        tenant={state.tenant || ""}
+        setTenant={(v) => setState((p) => ({ ...p, tenant: v }))}
         device={state.device}
         setDevice={(v) => setState((p) => ({ ...p, device: v }))}
         orientation={state.orientation}
@@ -617,6 +701,8 @@ export function ScreenshotEditor() {
             orientation={state.orientation}
             theme={theme}
             locale={state.locale}
+            projectId={projectId}
+            tenant={state.tenant}
             appName={state.appName}
             appIcon={state.appIcon}
             connectedCanvas={state.connectedCanvas}
@@ -638,6 +724,8 @@ export function ScreenshotEditor() {
               orientation={state.orientation}
               theme={theme}
               locale={state.locale}
+              projectId={projectId}
+              tenant={state.tenant}
               appName={state.appName}
               appIcon={state.appIcon}
               connectedCanvas={state.connectedCanvas}
@@ -664,6 +752,8 @@ export function ScreenshotEditor() {
               device={state.device}
               orientation={state.orientation}
               locale={state.locale}
+              projectId={projectId}
+              tenant={state.tenant}
               selectedElementId={
                 selectedElement?.slideId === activeSlide.id ? selectedElement.elementId : null
               }
@@ -720,6 +810,8 @@ export function ScreenshotEditor() {
                 orientation={state.orientation}
                 theme={theme}
                 locale={exportLocaleOverride ?? state.locale}
+                projectId={projectId}
+                tenant={state.tenant}
                 appName={state.appName}
                 appIcon={state.appIcon}
                 connectedCanvas={state.connectedCanvas}

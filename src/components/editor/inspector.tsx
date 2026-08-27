@@ -51,6 +51,8 @@ type Props = {
   device: Device;
   orientation: Orientation;
   locale: string;
+  projectId: string;
+  tenant?: string;
   selectedElementId: ElementId | null;
   onChange: (patch: Partial<Slide>) => void;
   onSelectElement: (id: ElementId | null) => void;
@@ -67,6 +69,8 @@ export function Inspector({
   device,
   orientation,
   locale,
+  projectId,
+  tenant,
   selectedElementId,
   onChange,
   onSelectElement,
@@ -170,6 +174,8 @@ export function Inspector({
               label="Primary"
               value={slide.screenshot}
               locale={locale}
+              projectId={projectId}
+              tenant={tenant}
               onChange={(v) => onChange({ screenshot: v })}
             />
           </div>
@@ -182,6 +188,8 @@ export function Inspector({
               label="Secondary (back layer)"
               value={slide.screenshotSecondary || ""}
               locale={locale}
+              projectId={projectId}
+              tenant={tenant}
               onChange={(v) => onChange({ screenshotSecondary: v })}
             />
           </div>
@@ -201,7 +209,7 @@ export function Inspector({
 
         {isFeatureGraphic && (
           <p className="rounded-md border bg-muted/40 p-3 text-[11px] leading-relaxed text-muted-foreground">
-            Shows app icon + name + tagline. Drop an icon at <span className="rounded bg-background px-1 py-0.5 font-mono text-[10px] text-foreground">/public/app-icon.png</span> (or leave blank — the app initial will be used). Name is set in the toolbar.
+            Shows app icon + name + tagline. Drop an icon at <span className="rounded bg-background px-1 py-0.5 font-mono text-[10px] text-foreground">app-icon.png</span> in this project's asset folder (or leave blank — the app initial will be used). Name is set in the toolbar.
           </p>
         )}
       </div>

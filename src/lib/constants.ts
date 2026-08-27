@@ -1,4 +1,4 @@
-import type { Device, Orientation, SlideLayout, Theme, ThemeId } from "./types";
+import type { Device, Orientation, SlideLayout, Tenant, Theme, ThemeId } from "./types";
 
 // ---------- Canvas dimensions (design at largest required resolution) ----------
 export const CANVAS: Record<Device, { w: number; h: number; wL?: number; hL?: number }> = {
@@ -8,6 +8,7 @@ export const CANVAS: Record<Device, { w: number; h: number; wL?: number; hL?: nu
   "android-7":   { w: 1200, h: 1920, wL: 1920, hL: 1200 },
   "android-10":  { w: 1600, h: 2560, wL: 2560, hL: 1600 },
   "feature-graphic": { w: 1024, h: 500 },
+  macos:         { w: 2880, h: 1800 },
 };
 
 // ---------- Export sizes per device ----------
@@ -28,6 +29,14 @@ export const EXPORT_SIZES: Record<Device, ExportSize[]> = {
   "android-7":   [{ label: '7" Portrait',    w: 1200, h: 1920 }],
   "android-10":  [{ label: '10" Portrait',   w: 1600, h: 2560 }],
   "feature-graphic": [{ label: "Feature Graphic", w: 1024, h: 500 }],
+  // Apple App Store Connect: macOS screenshots must be exactly one of these
+  // four 16:10 sizes — no arbitrary scaling.
+  macos: [
+    { label: "2880×1800", w: 2880, h: 1800 },
+    { label: "2560×1600", w: 2560, h: 1600 },
+    { label: "1440×900",  w: 1440, h: 900 },
+    { label: "1280×800",  w: 1280, h: 800 },
+  ],
 };
 
 // Landscape sizes (tablets only)
@@ -52,6 +61,7 @@ export const MK_RATIO    = 1022 / 2082; // iPhone PNG mockup
 export const TAB_P_RATIO = 0.667;        // tablet portrait
 export const TAB_L_RATIO = 1.5;          // tablet landscape
 export const IPAD_RATIO  = 0.770;        // iPad
+export const MAC_RATIO   = 16 / 10;      // macOS App Store screenshot
 
 // iPhone mockup screen overlay (pre-measured)
 export const PHONE_SCREEN = {
@@ -78,6 +88,9 @@ export function tabletLW(cW: number, cH: number, clamp = 0.62) {
 }
 export function ipadW(cW: number, cH: number, clamp = 0.75) {
   return Math.min(clamp, 0.72 * (cH / cW) * IPAD_RATIO);
+}
+export function macW(cW: number, cH: number, clamp = 0.86) {
+  return Math.min(clamp, 0.9 * (cH / cW) * MAC_RATIO);
 }
 
 // ---------- Themes ----------
@@ -154,8 +167,22 @@ export function hasTheme(themeId: string | undefined): boolean {
   return !!themeId && !!THEMES[themeId];
 }
 
+// Reskin-only tenant support: merges a matching tenant's color overrides onto
+// the project's base theme. Headlines/layout are untouched — callers keep
+// using the same theme object everywhere colors are read.
+export function resolveTheme(
+  themeId: string | undefined,
+  tenants: Tenant[] | undefined,
+  activeTenantId: string | undefined,
+): Theme {
+  const base = themeById(themeId);
+  const tenant = tenants?.find((t) => t.id === activeTenantId);
+  return tenant?.colors ? { ...base, ...tenant.colors } : base;
+}
+
 export const STORAGE_KEY = "app-store-screenshots:project:v1";
 export const PROJECT_SCHEMA_VERSION = 2;
+export const LAST_PROJECT_STORAGE_KEY = "app-store-screenshots:last-project";
 
 export const DEVICE_LABEL: Record<Device, string> = {
   iphone: "iPhone",
@@ -164,6 +191,7 @@ export const DEVICE_LABEL: Record<Device, string> = {
   "android-7": 'Android 7" Tablet',
   "android-10": 'Android 10" Tablet',
   "feature-graphic": "Feature Graphic",
+  macos: "Mac",
 };
 
 // Friendly labels for slide layouts (used in dropdowns)

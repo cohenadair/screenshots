@@ -1,0 +1,22 @@
+{
+  "projects": [
+    {
+      "id": "activity-log",
+      "name": "Activity Log",
+      "root": "../activity-log/screenshots-assets",
+      "defaultDevice": "iphone"
+    },
+    {
+      "id": "anglers-log",
+      "name": "Anglers' Log",
+      "root": "../anglers-log/screenshots-assets",
+      "defaultDevice": "iphone"
+    },
+    {
+      "id": "pro-iq",
+      "name": "Pro IQ",
+      "root": "../pro-iq/screenshots-assets",
+      "defaultDevice": "iphone"
+    }
+  ]
+}
