@@ -79,8 +79,8 @@ The toolbar dropdown lists every Apple/Google-required size for the current devi
 | Where | What |
 |-------|------|
 | `projects.json` | Registry of projects the picker offers, and where each one's assets live on disk |
-| `src/lib/constants.ts` | Canvas dimensions, export sizes, frame ratios, themes, locales, tenant color merging |
-| `<project>/app-store-screenshots.json` | Per-project starter state: app name, current device, connected-canvas mode, slide copy, screenshots, tenants, and transforms — lives in that project's own repo |
+| `src/lib/constants.ts` | Canvas dimensions, export sizes, frame ratios, shared starter theme presets, locales, tenant color merging |
+| `<project>/app-store-screenshots.json` | Per-project starter state: app name, current device, connected-canvas mode, slide copy, screenshots, tenants, transforms, and (usually) an inline `theme` — lives in that project's own repo |
 | `src/lib/defaults.ts` | Fallback/reset state used when no project file or local cache exists |
 | `src/components/editor/slide-canvas.tsx` | Add new layouts and connected-canvas element rendering |
 | `src/components/editor/device-frames.tsx` | Tweak device chrome (bezel radii, camera dots) |
@@ -93,4 +93,4 @@ The toolbar dropdown lists every Apple/Google-required size for the current devi
 - Reset via the toolbar's circular arrow icon clears in-memory state and reloads the default screens. To wipe disk state too, delete the active project's `app-store-screenshots.json`.
 - **Persistence model** — the canonical state lives in the active project's own `app-store-screenshots.json` (git-tracked in that project's repo). On load, the editor reads a project-namespaced localStorage key first for instant paint, then overwrites with the file contents if present; if the file endpoint is unavailable, autosave is blocked so stale cache cannot overwrite disk. On save, both are written. If you ever see a conflict, the file always wins.
 - **Migration model** — schema v1 projects do not need a manual conversion. On first load, the editor upgrades localized text and transform records, writes `schemaVersion: 2`, preserves all existing screens, and keeps `connectedCanvas: false` so old offscreen/clipped elements export exactly as isolated screens. Turn on **Connected** in the toolbar when you want elements to cross screen edges.
-- **Custom themes** — if a project file references a theme id that is not present in `src/lib/constants.ts`, the editor falls back to `clean-light` and shows a warning. Merge custom `THEMES` entries during in-place upgrades.
+- **Themes** — `src/lib/constants.ts`'s `THEMES` map only holds the generic starter presets (`clean-light`, `dark-bold`, `warm-editorial`, `ocean-fresh`, `bloom-roast`) a brand-new project can reference by `themeId`. A project with its own brand palette should define it inline instead, as a `theme` object on its `app-store-screenshots.json` (see `pro-iq` or `activity-log` for examples) — `theme` always wins over `themeId` when both are present, and it's the right place for anything project-specific rather than adding another entry to the shared `THEMES` map. The fallback-theme warning only fires when a project has neither a valid `themeId` nor an inline `theme`.

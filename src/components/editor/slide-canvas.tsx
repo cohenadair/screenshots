@@ -28,7 +28,7 @@ import {
 import { toAssetUrl } from "@/lib/assets";
 import { toTextElementId } from "@/lib/elements";
 import { img } from "@/lib/image-cache";
-import { pickText, resolveScreenshot } from "@/lib/locale";
+import { DEFAULT_LOCALE, pickText, resolveScreenshot } from "@/lib/locale";
 import {
   AndroidPhone,
   AndroidTabletL,
@@ -219,10 +219,23 @@ function EditableText({
 
 // ---------- Caption (label + headline) ----------
 
+// Per-device headline size multiplier, applied on top of the normal
+// unit-based scaling. iPad's and macOS's canvas aspect ratios otherwise
+// render the headline larger than it should look next to the device frame.
+const HEADLINE_FONT_SCALE: Partial<Record<Device, number>> = {
+  ipad: 0.75,
+  macos: 0.6,
+  android: 0.75,
+};
+function headlineFontScale(device: Device): number {
+  return HEADLINE_FONT_SCALE[device] ?? 1;
+}
+
 function Caption({
   cW,
   cH,
   slide,
+  device,
   theme,
   locale,
   editable,
@@ -234,6 +247,7 @@ function Caption({
   cW: number;
   cH: number;
   slide: Slide;
+  device: Device;
   theme: Theme;
   locale: string;
   editable?: boolean;
@@ -243,10 +257,11 @@ function Caption({
   onFocus?: () => void;
 }) {
   const fg = inverted ? theme.fgAlt : theme.fg;
-  const accent = theme.accent;
+  const accent = inverted ? theme.accentAlt ?? theme.accent : theme.accent;
   // Scale typography off the *shorter* dimension so landscape layouts don't
   // produce headlines so tall they overlap the device frame.
   const unit = Math.min(cW, cH);
+  const headlineFontSize = unit * 0.092 * headlineFontScale(device);
   return (
     <div style={{ textAlign: align, position: "relative", width: "100%" }}>
       <EditableText
@@ -273,7 +288,7 @@ function Caption({
         onFocus={onFocus}
         placeholder="Headline goes here"
         style={{
-          fontSize: unit * 0.092,
+          fontSize: headlineFontSize,
           fontWeight: 700,
           lineHeight: 0.96,
           letterSpacing: -unit * 0.001,
@@ -350,14 +365,83 @@ type LayoutRects = {
   deviceSecondary?: Rect;
 };
 
+// Cached offscreen canvas for text measurement — created lazily so this
+// module stays SSR-safe (no `document` on the server).
+let measureCtx: CanvasRenderingContext2D | null | undefined;
+function getMeasureCtx(): CanvasRenderingContext2D | null {
+  if (measureCtx !== undefined) return measureCtx;
+  measureCtx = typeof document === "undefined" ? null : document.createElement("canvas").getContext("2d");
+  return measureCtx;
+}
+
+// Counts rendered headline lines at `fontSizePx`/`maxWidthPx`, including
+// lines that wrap on their own (no explicit `\n`) — a plain newline count
+// undercounts those, since headline width and line-breaking depend on the
+// actual word lengths and the caption's render width, not just the source
+// text. Falls back to an average-char-width estimate when no canvas is
+// available (e.g. SSR).
+function countHeadlineLines(text: string, fontSizePx: number, maxWidthPx: number): number {
+  const paragraphs = text.split("\n");
+  const ctx = getMeasureCtx();
+  if (!ctx) {
+    const avgCharW = fontSizePx * 0.56; // rough bold-sans-serif average
+    const charsPerLine = Math.max(1, Math.floor(maxWidthPx / avgCharW));
+    return paragraphs.reduce((sum, p) => sum + Math.max(1, Math.ceil(p.length / charsPerLine)), 0);
+  }
+  ctx.font = `700 ${fontSizePx}px Inter, sans-serif`;
+  let lines = 0;
+  for (const paragraph of paragraphs) {
+    const words = paragraph.split(" ").filter((w) => w.length > 0);
+    if (words.length === 0) {
+      lines += 1;
+      continue;
+    }
+    let lineWidth = 0;
+    lines += 1;
+    for (const word of words) {
+      const wordWidth = ctx.measureText(`${word} `).width;
+      if (lineWidth > 0 && lineWidth + wordWidth > maxWidthPx) {
+        lines += 1;
+        lineWidth = wordWidth;
+      } else {
+        lineWidth += wordWidth;
+      }
+    }
+  }
+  return Math.max(1, lines);
+}
+
+// Approximates the rendered height of a caption's label + headline block,
+// using the same font-size/line-height formulas as the Caption component.
+// Text-content-aware (real wrapped line count), not a full DOM measurement —
+// good enough to balance default layout spacing without needing to render
+// first.
+function estimateCaptionTextHeight(
+  cW: number,
+  cH: number,
+  slide: Slide,
+  maxTextWidth: number,
+  device: Device,
+): number {
+  const unit = Math.min(cW, cH);
+  const headline = pickText(slide.headline, DEFAULT_LOCALE) || "Two\nline headline";
+  const headlineFontSize = unit * 0.092 * headlineFontScale(device);
+  const lines = countHeadlineLines(headline, headlineFontSize, maxTextWidth);
+  const labelBlock = unit * 0.028 * 1.2 + unit * 0.018; // font line-height + marginBottom
+  const headlineBlock = lines * headlineFontSize * 0.96; // fontSize * lineHeight, per line
+  return labelBlock + headlineBlock;
+}
+
 function getDefaultRects(
-  layout: Slide["layout"],
+  slide: Slide,
+  device: Device,
   cW: number,
   cH: number,
   frameAspect: number,
   fwFrac: number,
   fwSmallFrac: number,
 ): LayoutRects {
+  const layout = slide.layout;
   const deviceW = fwFrac * cW;
   const deviceH = deviceW / frameAspect;
   const smallW = fwSmallFrac * cW;
@@ -376,16 +460,23 @@ function getDefaultRects(
           height: deviceH,
         },
       };
-    case "device-bottom":
+    case "device-bottom": {
+      // Equal gaps: canvas-top -> text-top, text-bottom -> device-top,
+      // device-bottom -> canvas-bottom. The caption box is sized to fit the
+      // actual text (not the oversized generic capH) so the "text-bottom"
+      // edge in that math is where the text really ends.
+      const textH = estimateCaptionTextHeight(cW, cH, slide, capW, device);
+      const gap = Math.max(cH * 0.02, (cH - textH - deviceH) / 3);
       return {
-        caption: { x: cW * 0.08, y: cH * 0.08, width: capW, height: capH, align: "center" },
+        caption: { x: cW * 0.08, y: gap, width: capW, height: textH, align: "center" },
         device: {
           x: (cW - deviceW) / 2,
-          y: cH - deviceH - cH * 0.02,
+          y: gap * 2 + textH,
           width: deviceW,
           height: deviceH,
         },
       };
+    }
     case "device-top":
       return {
         caption: { x: cW * 0.08, y: cH * 0.65, width: capW, height: capH, align: "center" },
@@ -467,7 +558,7 @@ function getSlideGeometry(slide: Slide, device: Device, orientation: Orientation
   const frameAspect = getFrameAspect(device, orientation);
   const fwFrac = widthFn(cW, cH);
   const fwSmallFrac = smallWidthFn(cW, cH);
-  const defaults = getDefaultRects(slide.layout, cW, cH, frameAspect, fwFrac, fwSmallFrac);
+  const defaults = getDefaultRects(slide, device, cW, cH, frameAspect, fwFrac, fwSmallFrac);
   return { cW, cH, Frame, frameAspect, defaults };
 }
 
@@ -742,6 +833,7 @@ function SlideBackground({
   theme: Theme;
 }) {
   const inverted = !!slide.inverted;
+  const accent = inverted ? theme.accentAlt ?? theme.accent : theme.accent;
   return (
     <div
       style={{
@@ -752,8 +844,8 @@ function SlideBackground({
         color: inverted ? theme.fgAlt : theme.fg,
       }}
     >
-      <Blob cW={cW} color={theme.accent} x={-15} y={-10} size={80} opacity={inverted ? 0.25 : 0.32} />
-      <Blob cW={cW} color={theme.accent} x={70} y={75} size={70} opacity={inverted ? 0.18 : 0.25} />
+      <Blob cW={cW} color={accent} x={-15} y={-10} size={80} opacity={inverted ? 0.25 : 0.32} />
+      <Blob cW={cW} color={accent} x={70} y={75} size={70} opacity={inverted ? 0.18 : 0.25} />
     </div>
   );
 }
@@ -828,6 +920,10 @@ function FeatureGraphicCanvas({
   edit?: EditHandlers;
 }) {
   const resolvedIcon = toAssetUrl(projectId, appIcon);
+  // Always renders against bgAlt (see `color: theme.fgAlt` below), so the
+  // accent-on-bgAlt variant is the correct one here even though this
+  // component never sees a per-slide `inverted` flag.
+  const accent = theme.accentAlt ?? theme.accent;
   return (
     <div
       style={{
@@ -835,14 +931,14 @@ function FeatureGraphicCanvas({
         height: "100%",
         position: "relative",
         overflow: "hidden",
-        background: `linear-gradient(135deg, ${theme.bgAlt} 0%, ${shade(theme.bgAlt, -10)} 50%, ${theme.accent} 200%)`,
+        background: `linear-gradient(135deg, ${theme.bgAlt} 0%, ${shade(theme.bgAlt, -10)} 50%, ${accent} 200%)`,
         display: "flex",
         alignItems: "center",
         padding: `0 ${cW * 0.06}px`,
         color: theme.fgAlt,
       }}
     >
-      <Blob cW={cW} color={theme.accent} x={70} y={20} size={50} opacity={0.45} />
+      <Blob cW={cW} color={accent} x={70} y={20} size={50} opacity={0.45} />
       <div style={{ display: "flex", alignItems: "center", gap: cW * 0.03, zIndex: 2 }}>
         {resolvedIcon && img(resolvedIcon) ? (
           <img
@@ -863,7 +959,7 @@ function FeatureGraphicCanvas({
               width: cW * 0.13,
               height: cW * 0.13,
               borderRadius: cW * 0.022,
-              background: `linear-gradient(135deg, ${theme.accent}55, ${theme.accent})`,
+              background: `linear-gradient(135deg, ${accent}55, ${accent})`,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -960,6 +1056,7 @@ function SlideElements({
         cW={cW}
         cH={cH}
         slide={slide}
+        device={device}
         theme={theme}
         locale={locale}
         editable={editable}

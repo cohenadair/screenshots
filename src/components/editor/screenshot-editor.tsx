@@ -115,7 +115,7 @@ export function ScreenshotEditor() {
   );
   const activeSlide =
     currentSlides.find((s) => s.id === activeSlideId) || currentSlides[0] || null;
-  const theme = resolveTheme(state.themeId, state.tenants, state.tenant);
+  const theme = resolveTheme(state, state.tenants, state.tenant);
 
   React.useEffect(() => {
     if (selectedElement && selectedElement.slideId !== activeSlide?.id) {
@@ -137,13 +137,13 @@ export function ScreenshotEditor() {
   }, [state.device, state.orientation, setState]);
 
   React.useEffect(() => {
-    if (hydrated && state.themeId && !hasTheme(state.themeId)) {
+    if (hydrated && !state.theme && state.themeId && !hasTheme(state.themeId)) {
       toast.warning("Using fallback theme", {
-        description: `Theme "${state.themeId}" is not defined in src/lib/constants.ts.`,
+        description: `Theme "${state.themeId}" is not defined in src/lib/constants.ts, and this project has no inline "theme".`,
         duration: 8000,
       });
     }
-  }, [hydrated, state.themeId]);
+  }, [hydrated, state.theme, state.themeId]);
 
   const assetPaths = React.useMemo(() => {
     const paths = new Set<string>();

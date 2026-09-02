@@ -89,8 +89,12 @@ export function tabletLW(cW: number, cH: number, clamp = 0.62) {
 export function ipadW(cW: number, cH: number, clamp = 0.75) {
   return Math.min(clamp, 0.72 * (cH / cW) * IPAD_RATIO);
 }
-export function macW(cW: number, cH: number, clamp = 0.86) {
-  return Math.min(clamp, 0.9 * (cH / cW) * MAC_RATIO);
+// Near-full-bleed: unlike the other device types, MacWindow draws no
+// bezel/shadow around the screenshot (it's expected to already contain real
+// window chrome), so there's no frame that needs breathing room — just a
+// hair of margin so the edge doesn't look accidentally cropped.
+export function macW(cW: number, cH: number, clamp = 0.98) {
+  return Math.min(clamp, (cH / cW) * MAC_RATIO);
 }
 
 // ---------- Themes ----------
@@ -147,16 +151,6 @@ export const THEMES: Record<string, Theme> = {
     accent: "#B8794A",
     muted: "#65736B",
   },
-  "activity-log-green": {
-    id: "activity-log-green",
-    name: "Activity Log Green",
-    bg: "#E8F5E9",
-    bgAlt: "#2E7D32",
-    fg: "#1B5E20",
-    fgAlt: "#FFFFFF",
-    accent: "#4CAF50",
-    muted: "#558B5A",
-  },
 };
 
 export function themeById(themeId: string | undefined): Theme {
@@ -167,15 +161,17 @@ export function hasTheme(themeId: string | undefined): boolean {
   return !!themeId && !!THEMES[themeId];
 }
 
-// Reskin-only tenant support: merges a matching tenant's color overrides onto
-// the project's base theme. Headlines/layout are untouched — callers keep
-// using the same theme object everywhere colors are read.
+// Resolves a project's base theme: its own inline `theme` (brand-specific,
+// owned by that project's config file) takes precedence over `themeId`
+// (a reference into the shared THEMES presets below). Reskin-only tenants
+// then layer their color overrides on top — headlines/layout are untouched,
+// callers keep using the same theme object everywhere colors are read.
 export function resolveTheme(
-  themeId: string | undefined,
+  project: { themeId?: string; theme?: Theme },
   tenants: Tenant[] | undefined,
   activeTenantId: string | undefined,
 ): Theme {
-  const base = themeById(themeId);
+  const base = project.theme || themeById(project.themeId);
   const tenant = tenants?.find((t) => t.id === activeTenantId);
   return tenant?.colors ? { ...base, ...tenant.colors } : base;
 }

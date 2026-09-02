@@ -235,9 +235,15 @@ export function IPad({ src, alt = "", style, hideEmpty }: FrameProps) {
   );
 }
 
-// macOS — bare screenshot (drop shadow + subtle rounded corners), no
-// synthetic title bar. Source screenshots are expected to already carry
-// real macOS window chrome, so drawing another one would double up.
+// No synthetic bezel/card treatment: macOS screenshots are expected to
+// already contain the real window chrome (traffic lights, titlebar, and
+// often a native drop shadow with rounded corners baked in as transparency),
+// unlike phone/tablet captures which are just app content and need a device
+// mockup laid over them. `contain` (not `cover`) shows the screenshot in
+// full — including its own shadow — instead of cropping into it or, worse,
+// into real content when the source aspect ratio isn't exactly 16:10.
+// Background is transparent so the shadow's fade and any letterboxing show
+// the slide's own background instead of a hard-edged fallback color.
 export function MacWindow({ src, alt = "", style, hideEmpty }: FrameProps) {
   const resolved = img(src);
   return (
@@ -246,17 +252,15 @@ export function MacWindow({ src, alt = "", style, hideEmpty }: FrameProps) {
         style={{
           width: "100%",
           height: "100%",
-          borderRadius: "1.4%",
           overflow: "hidden",
-          background: "#000",
-          boxShadow: "0 24px 64px rgba(0,0,0,0.35)",
+          background: "transparent",
         }}
       >
         {resolved ? (
           <img
             src={resolved}
             alt={alt}
-            style={{ display: "block", width: "100%", height: "100%", objectFit: "cover", objectPosition: "top" }}
+            style={{ display: "block", width: "100%", height: "100%", objectFit: "contain", objectPosition: "center" }}
             draggable={false}
           />
         ) : hideEmpty ? null : (

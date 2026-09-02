@@ -84,7 +84,12 @@ export type Theme = {
   bgAlt: string;       // inverted background
   fg: string;          // text on bg
   fgAlt: string;       // text on bgAlt
-  accent: string;
+  accent: string;      // accent on bg (labels, decorative blobs, feature graphic)
+  // Accent on bgAlt. Optional — most themes use one accent color saturated
+  // enough to read on both bg and bgAlt (e.g. a brand green). Set this when
+  // that's not possible, e.g. a monochrome theme whose "accent" is really
+  // just white/black and needs to flip with the background.
+  accentAlt?: string;
   muted: string;
 };
 
@@ -105,7 +110,14 @@ export type Tenant = {
 export type ProjectState = {
   schemaVersion?: number;
   appName: string;
+  // References a shared preset in constants.ts THEMES. Ignored when `theme`
+  // (below) is set — most projects with brand-specific colors should define
+  // `theme` inline instead of adding a new preset to the shared file.
   themeId: string;
+  // Inline theme, owned by this project's own config file. Takes precedence
+  // over `themeId` when present — use this for a brand-specific palette
+  // rather than adding an entry to the shared THEMES map in constants.ts.
+  theme?: Theme;
   // v1 projects render as isolated screens until the user opts into connected crops.
   connectedCanvas: boolean;
   // Locales this project targets. Drives the toolbar dropdown and bulk export.
