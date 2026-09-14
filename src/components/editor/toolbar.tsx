@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { AlertTriangle, Check, Cloud, Download, UnfoldHorizontal, RotateCcw } from "lucide-react";
+import { AlertTriangle, Check, Cloud, Download, HelpCircle, UnfoldHorizontal, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  CAPTURE_GUIDE,
   DEVICE_LABEL,
   supportsLandscape,
 } from "@/lib/constants";
@@ -57,6 +58,7 @@ export function Toolbar(props: Props) {
   const platform = detectPlatform(props.device);
   const hasLandscape = supportsLandscape(props.device);
   const [resetOpen, setResetOpen] = React.useState(false);
+  const [helpOpen, setHelpOpen] = React.useState(false);
 
   // Track last device per platform so iOS/Android/Mac tabs preserve user's choice.
   const lastByPlatform = React.useRef<{ ios: Device; android: Device; macos: Device }>({
@@ -236,6 +238,16 @@ export function Toolbar(props: Props) {
           variant="ghost"
           size="icon"
           className="h-8 w-8"
+          onClick={() => setHelpOpen(true)}
+          title="Ideal capture device per platform"
+          aria-label="Capture device help"
+        >
+          <HelpCircle className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
           onClick={() => setResetOpen(true)}
           title="Reset screens to defaults"
           aria-label="Reset"
@@ -287,6 +299,30 @@ export function Toolbar(props: Props) {
             >
               Reset all devices
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Ideal capture device per platform</DialogTitle>
+            <DialogDescription>
+              Shoot one screenshot per platform on the device below — the app scales it into
+              every required App Store/Play Store size on export. A mismatched aspect ratio is
+              what actually causes distortion, not the exact pixel count.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-1.5">
+            {CAPTURE_GUIDE.map(({ device, source, resolution }) => (
+              <div key={device} className="flex flex-col gap-0.5 rounded-md border p-2 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{DEVICE_LABEL[device]}</span>
+                  <span className="text-muted-foreground">{resolution}</span>
+                </div>
+                <span className="text-muted-foreground">{source}</span>
+              </div>
+            ))}
           </div>
         </DialogContent>
       </Dialog>

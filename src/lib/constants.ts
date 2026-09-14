@@ -190,6 +190,49 @@ export const DEVICE_LABEL: Record<Device, string> = {
   macos: "Mac",
 };
 
+// ---------- Capture guide ----------
+// One recommended real device/simulator per platform to shoot screenshots
+// on, at that device's own native resolution. The editor scales a single
+// capture into every EXPORT_SIZES/EXPORT_SIZES_LANDSCAPE size on export, so
+// there's no need to shoot separately for each required App Store/Play
+// Store size — just avoid feeding it a mismatched aspect ratio, which is
+// what actually causes visible distortion in the device frame.
+export type CaptureGuideEntry = {
+  device: Device;
+  source: string;
+  resolution: string;
+};
+
+export const CAPTURE_GUIDE: CaptureGuideEntry[] = [
+  { device: "iphone", source: "iPhone 17 Pro simulator", resolution: "1206 × 2622" },
+  { device: "ipad", source: "iPad Pro 13-inch (M5) simulator", resolution: "2064 × 2752" },
+  {
+    device: "android",
+    source: 'Pixel phone emulator, or Android Studio\'s generic "Phone" AVD',
+    resolution: "1080 × 1920",
+  },
+  {
+    device: "android-7",
+    source: "Nexus 7 (2013) emulator profile — rotate for landscape slides",
+    resolution: "1200 × 1920",
+  },
+  {
+    device: "android-10",
+    source: "Nexus 10 emulator profile (or Pixel C) — rotate for landscape slides",
+    resolution: "1600 × 2560",
+  },
+  {
+    device: "feature-graphic",
+    source: "Static banner artwork — no device capture needed",
+    resolution: "1024 × 500",
+  },
+  {
+    device: "macos",
+    source: "Any display, window captured at exactly this size (Retina 1440×900 @2x)",
+    resolution: "2880 × 1800",
+  },
+];
+
 // Friendly labels for slide layouts (used in dropdowns)
 export const LAYOUT_LABEL: Record<SlideLayout, string> = {
   hero: "Hero",
