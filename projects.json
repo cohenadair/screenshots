@@ -17,6 +17,12 @@
       "name": "Pro IQ",
       "root": "../pro-iq/screenshots-assets",
       "defaultDevice": "iphone"
+    },
+    {
+      "id": "tapd",
+      "name": "Tapd",
+      "root": "../tapd/screenshots-assets",
+      "defaultDevice": "iphone"
     }
   ]
 }

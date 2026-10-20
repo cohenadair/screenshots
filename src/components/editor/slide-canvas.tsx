@@ -451,6 +451,24 @@ function getDefaultRects(
 
   switch (layout) {
     case "hero":
+      if (device === "ipad") {
+        // Balanced spacing: the space above the text matches the space below
+        // the device, and both are 90% of the text -> device gap. The extra
+        // top tightening offsets the smaller iPad headline, which otherwise
+        // makes the block look low on the canvas.
+        const textH = estimateCaptionTextHeight(cW, cH, slide, capW, device);
+        const gap = Math.max(cH * 0.02, (cH - textH - deviceH) / 2.8);
+        const top = gap * 0.9;
+        return {
+          caption: { x: cW * 0.08, y: top, width: capW, height: textH, align: "center" },
+          device: {
+            x: (cW - deviceW) / 2,
+            y: top + textH + gap,
+            width: deviceW,
+            height: deviceH,
+          },
+        };
+      }
       return {
         caption: { x: cW * 0.08, y: cH * 0.09, width: capW, height: capH, align: "center" },
         device: {

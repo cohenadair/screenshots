@@ -1,6 +1,15 @@
 "use client";
 import * as React from "react";
-import { AlertTriangle, Check, Cloud, Download, HelpCircle, UnfoldHorizontal, RotateCcw } from "lucide-react";
+import {
+  AlertTriangle,
+  Check,
+  Cloud,
+  Download,
+  FolderDown,
+  HelpCircle,
+  UnfoldHorizontal,
+  RotateCcw,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -46,9 +55,11 @@ type Props = {
   orientation: Orientation;
   setOrientation: (v: Orientation) => void;
   onExport: () => void;
+  onExportAll: () => void;
   onResetAll: () => void;
   onResetDevice: () => void;
   exporting: string | null;
+  exportMode: "bundle" | "all" | null;
   savedAt: number | null;
   saveError: string | null;
   busy: boolean;
@@ -85,7 +96,7 @@ export function Toolbar(props: Props) {
             onValueChange={props.setActiveProjectId}
             disabled={props.busy}
           >
-            <SelectTrigger className="h-8 w-36 text-xs">
+            <SelectTrigger className="h-8 w-28 text-xs">
               <SelectValue placeholder="Project" />
             </SelectTrigger>
             <SelectContent>
@@ -103,7 +114,7 @@ export function Toolbar(props: Props) {
       <Input
         value={props.appName}
         onChange={(e) => props.setAppName(e.target.value)}
-        className="h-8 w-40 border-dashed text-sm font-semibold focus-visible:border-input focus-visible:border-solid focus-visible:bg-background"
+        className="h-8 w-32 border-dashed text-sm font-semibold focus-visible:border-input focus-visible:border-solid focus-visible:bg-background"
         placeholder="App name"
         aria-label="App name"
         title="App name (click to edit)"
@@ -163,7 +174,7 @@ export function Toolbar(props: Props) {
         onValueChange={(v) => props.setDevice(v as Device)}
         disabled={props.busy}
       >
-        <SelectTrigger className="h-8 w-44 text-xs">
+        <SelectTrigger className="h-8 w-40 text-xs">
           <SelectValue placeholder="Device">{deviceLabel}</SelectValue>
         </SelectTrigger>
         <SelectContent>
@@ -191,7 +202,7 @@ export function Toolbar(props: Props) {
           onValueChange={(v) => props.setOrientation(v as Orientation)}
           disabled={props.busy}
         >
-          <SelectTrigger className="h-8 w-32 text-xs">
+          <SelectTrigger className="h-8 w-28 text-xs">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -203,7 +214,7 @@ export function Toolbar(props: Props) {
 
       {showLocale && (
         <Select value={props.locale} onValueChange={props.setLocale} disabled={props.busy}>
-          <SelectTrigger className="h-8 w-20 text-xs">
+          <SelectTrigger className="h-8 w-16 text-xs">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -218,7 +229,7 @@ export function Toolbar(props: Props) {
 
       {showTenant && (
         <Select value={props.tenant} onValueChange={props.setTenant} disabled={props.busy}>
-          <SelectTrigger className="h-8 w-32 text-xs">
+          <SelectTrigger className="h-8 w-28 text-xs">
             <SelectValue placeholder="Tenant" />
           </SelectTrigger>
           <SelectContent>
@@ -263,7 +274,21 @@ export function Toolbar(props: Props) {
           title="Export every size × locale for this device as a zip"
         >
           <Download className="h-4 w-4" />
-          {props.exporting ? `Exporting ${props.exporting}` : "Export bundle"}
+          {props.exporting && props.exportMode === "bundle"
+            ? `Exporting ${props.exporting}`
+            : "Export bundle"}
+        </Button>
+        <Button
+          onClick={props.onExportAll}
+          disabled={!!props.exporting}
+          size="sm"
+          className="h-8"
+          title="Export every device × size × locale for this project as a zip"
+        >
+          <FolderDown className="h-4 w-4" />
+          {props.exporting && props.exportMode === "all"
+            ? `Exporting ${props.exporting}`
+            : "Export All"}
         </Button>
       </div>
 
@@ -330,6 +355,11 @@ export function Toolbar(props: Props) {
   );
 }
 
+// Fixed width so the label changing as you type ("saved 2m ago" → "saved")
+// can't re-wrap the toolbar, which resizes the preview and changes its zoom.
+const SAVE_STATUS_CLASS =
+  "flex w-28 shrink-0 items-center justify-end gap-1 whitespace-nowrap text-xs tabular-nums";
+
 function SaveStatus({ savedAt, saveError }: { savedAt: number | null; saveError: string | null }) {
   const [, setTick] = React.useState(0);
   React.useEffect(() => {
@@ -339,10 +369,7 @@ function SaveStatus({ savedAt, saveError }: { savedAt: number | null; saveError:
 
   if (saveError) {
     return (
-      <span
-        className="flex items-center gap-1 text-xs text-destructive"
-        title={saveError}
-      >
+      <span className={`${SAVE_STATUS_CLASS} text-destructive`} title={saveError}>
         <AlertTriangle className="h-3.5 w-3.5" /> save failed
       </span>
     );
@@ -350,7 +377,7 @@ function SaveStatus({ savedAt, saveError }: { savedAt: number | null; saveError:
 
   if (!savedAt) {
     return (
-      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+      <span className={`${SAVE_STATUS_CLASS} text-muted-foreground`}>
         <Cloud className="h-3.5 w-3.5" /> not saved yet
       </span>
     );
@@ -365,7 +392,7 @@ function SaveStatus({ savedAt, saveError }: { savedAt: number | null; saveError:
           ? `saved ${Math.round(seconds / 60)}m ago`
           : `saved ${Math.round(seconds / 3600)}h ago`;
   return (
-    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+    <span className={`${SAVE_STATUS_CLASS} text-muted-foreground`}>
       <Check className="h-3.5 w-3.5 text-green-500" /> {label}
     </span>
   );
