@@ -1,6 +1,20 @@
 "use client";
 import * as React from "react";
-import { PHONE_SCREEN } from "@/lib/constants";
+import {
+  ANDROID_TABLET_BEZEL,
+  ANDROID_TABLET_L_RATIO,
+  ANDROID_TABLET_P_RATIO,
+  PHONE_SCREEN,
+} from "@/lib/constants";
+
+// Android tablet screen insets, as percentages of the frame's own width
+// and height (see ANDROID_TABLET_BEZEL).
+const TAB_SHORT = 1 + 2 * ANDROID_TABLET_BEZEL;
+const TAB_LONG = 1.6 + 2 * ANDROID_TABLET_BEZEL;
+const TAB_INSET_SHORT = `${(ANDROID_TABLET_BEZEL / TAB_SHORT) * 100}%`;
+const TAB_INSET_LONG = `${(ANDROID_TABLET_BEZEL / TAB_LONG) * 100}%`;
+const TAB_SCREEN_SHORT = `${(1 / TAB_SHORT) * 100}%`;
+const TAB_SCREEN_LONG = `${(1.6 / TAB_LONG) * 100}%`;
 import { img } from "@/lib/image-cache";
 
 type FrameProps = {
@@ -96,7 +110,7 @@ export function AndroidPhone({ src, alt = "", style, hideEmpty }: FrameProps) {
 export function AndroidTabletP({ src, alt = "", style, hideEmpty }: FrameProps) {
   const resolved = img(src);
   return (
-    <div style={{ position: "relative", aspectRatio: "5 / 8", ...style }}>
+    <div style={{ position: "relative", aspectRatio: `${ANDROID_TABLET_P_RATIO}`, ...style }}>
       <div
         style={{
           width: "100%",
@@ -111,10 +125,10 @@ export function AndroidTabletP({ src, alt = "", style, hideEmpty }: FrameProps) 
         <div
           style={{
             position: "absolute",
-            left: "3.5%",
-            top: "2.2%",
-            width: "93%",
-            height: "95.6%",
+            left: TAB_INSET_SHORT,
+            top: TAB_INSET_LONG,
+            width: TAB_SCREEN_SHORT,
+            height: TAB_SCREEN_LONG,
             borderRadius: "2.5% / 1.6%",
             overflow: "hidden",
             background: "#000",
@@ -139,7 +153,7 @@ export function AndroidTabletP({ src, alt = "", style, hideEmpty }: FrameProps) 
 export function AndroidTabletL({ src, alt = "", style, hideEmpty }: FrameProps) {
   const resolved = img(src);
   return (
-    <div style={{ position: "relative", aspectRatio: "8 / 5", ...style }}>
+    <div style={{ position: "relative", aspectRatio: `${ANDROID_TABLET_L_RATIO}`, ...style }}>
       <div
         style={{
           width: "100%",
@@ -154,10 +168,10 @@ export function AndroidTabletL({ src, alt = "", style, hideEmpty }: FrameProps) 
         <div
           style={{
             position: "absolute",
-            left: "2.2%",
-            top: "3.5%",
-            width: "95.6%",
-            height: "93%",
+            left: TAB_INSET_LONG,
+            top: TAB_INSET_SHORT,
+            width: TAB_SCREEN_LONG,
+            height: TAB_SCREEN_SHORT,
             borderRadius: "1.6% / 2.5%",
             overflow: "hidden",
             background: "#000",
@@ -215,6 +229,63 @@ export function IPad({ src, alt = "", style, hideEmpty }: FrameProps) {
             width: "92%",
             height: "94.4%",
             borderRadius: "2.2% / 1.6%",
+            overflow: "hidden",
+            background: "#000",
+          }}
+        >
+          {resolved ? (
+            <img
+              src={resolved}
+              alt={alt}
+              style={{ display: "block", width: "100%", height: "100%", objectFit: "cover", objectPosition: "top" }}
+              draggable={false}
+            />
+          ) : hideEmpty ? null : (
+            <EmptySlot />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Landscape iPad — IPad's geometry rotated 90°. Only banners use it.
+export function IPadL({ src, alt = "", style, hideEmpty }: FrameProps) {
+  const resolved = img(src);
+  return (
+    <div style={{ position: "relative", aspectRatio: "1000 / 770", ...style }}>
+      <div
+        style={{
+          width: "100%",
+          height: "100%",
+          borderRadius: "3.6% / 5%",
+          background: "linear-gradient(180deg, #2C2C2E 0%, #1C1C1E 100%)",
+          position: "relative",
+          overflow: "hidden",
+          boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.1), 0 8px 40px rgba(0,0,0,0.6)",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            left: "1.2%",
+            top: "50%",
+            transform: "translateY(-50%)",
+            width: "0.65%",
+            height: "0.9%",
+            borderRadius: "50%",
+            background: "#111113",
+            zIndex: 20,
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            left: "2.8%",
+            top: "4%",
+            width: "94.4%",
+            height: "92%",
+            borderRadius: "1.6% / 2.2%",
             overflow: "hidden",
             background: "#000",
           }}

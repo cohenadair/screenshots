@@ -1,13 +1,14 @@
 "use client";
 import * as React from "react";
 import JSZip from "jszip";
-import { toPng } from "html-to-image";
+import { toJpeg, toPng } from "html-to-image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Toaster, toast } from "sonner";
 import { toAssetUrl } from "@/lib/assets";
 import {
   EXPORT_SIZES,
   LAST_PROJECT_STORAGE_KEY,
+  exportsAsJpeg,
   getExportSizes,
   hasTheme,
   resolveTheme,
@@ -499,11 +500,10 @@ export function ScreenshotEditor() {
     let reusedBackCount = 0;
     for (const job of jobs) {
       missingCount += job.slides.filter(
-        (slide) => slideNeedsScreenshot(job.device, slide) && !slide.screenshot,
+        (slide) => slide.layout !== "no-device" && !slide.screenshot,
       ).length;
       reusedBackCount += job.slides.filter(
         (slide) =>
-          job.device !== "feature-graphic" &&
           slide.layout === "two-devices" &&
           slide.screenshot &&
           !slide.screenshotSecondary,
@@ -568,9 +568,10 @@ export function ScreenshotEditor() {
               continue;
             }
             try {
-              const dataUrl = await captureSlide(el, cW, cH, size.w, size.h);
+              const jpeg = exportsAsJpeg(job.device);
+              const dataUrl = await captureSlide(el, cW, cH, size.w, size.h, jpeg);
               const base64 = dataUrl.split(",")[1] || "";
-              const filename = `${String(i + 1).padStart(2, "0")}-${slide.layout}.png`;
+              const filename = `${String(i + 1).padStart(2, "0")}-${slide.layout}.${jpeg ? "jpg" : "png"}`;
               const path = `${platform}/${job.device}/${size.w}x${size.h}/${locale}/${filename}`;
               zip.file(path, base64, { base64: true });
               okCount += 1;
@@ -629,6 +630,7 @@ export function ScreenshotEditor() {
     sourceH: number,
     exportW: number,
     exportH: number,
+    jpeg: boolean,
   ) {
     // html-to-image needs the node at (0,0). Let the library scale the source
     // canvas into the requested output dimensions; CSS transforms leave
@@ -679,9 +681,11 @@ export function ScreenshotEditor() {
       // finish loading before the SVG->canvas rasterization runs, and the
       // clone can snapshot blank. Rendering twice and keeping the second
       // result is the documented workaround for this class of bug.
-      await toPng(el, toPngOptions);
-      const dataUrl = await toPng(el, toPngOptions);
-      return dataUrl;
+      const render = jpeg
+        ? () => toJpeg(el, { ...toPngOptions, quality: 0.95 })
+        : () => toPng(el, toPngOptions);
+      await render();
+      return await render();
     } finally {
       el.style.left = prev.left || "-99999px";
       el.style.top = prev.top || "0px";
@@ -891,11 +895,6 @@ function slugify(s: string) {
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/(^-|-$)/g, "") || "screenshots"
   );
-}
-
-function slideNeedsScreenshot(device: Device, slide: Slide) {
-  if (device === "feature-graphic") return false;
-  return slide.layout !== "no-device" && slide.layout !== "feature-graphic";
 }
 
 function stamp() {

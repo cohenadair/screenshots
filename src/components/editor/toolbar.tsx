@@ -182,6 +182,8 @@ export function Toolbar(props: Props) {
             <>
               <SelectItem value="iphone">{DEVICE_LABEL.iphone}</SelectItem>
               <SelectItem value="ipad">{DEVICE_LABEL.ipad}</SelectItem>
+              <SelectItem value="app-store-header">{DEVICE_LABEL["app-store-header"]}</SelectItem>
+              <SelectItem value="app-store-search">{DEVICE_LABEL["app-store-search"]}</SelectItem>
             </>
           ) : platform === "android" ? (
             <>

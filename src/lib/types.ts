@@ -5,6 +5,8 @@ export type Device =
   | "android-7"
   | "android-10"
   | "feature-graphic"
+  | "app-store-header"
+  | "app-store-search"
   | "macos";
 
 export type Orientation = "portrait" | "landscape";
@@ -19,7 +21,11 @@ export type SlideLayout =
   | "two-devices"      // back + front phones, headline above
   | "no-device"        // big headline + decorative blob, no device
   | "split-landscape"  // landscape tablets only: caption left + device right
-  | "feature-graphic"; // 1024×500 banner with icon + name + tagline
+  | "banner";          // store banners: icon + name + headline + subtitle left, devices right
+
+// Device frame drawn inside a banner. The concrete frame (iPhone vs Android
+// phone, etc.) follows the banner device's platform.
+export type BannerFrame = "phone" | "tablet-portrait" | "tablet-landscape";
 
 // Per-element rect in canvas pixel space. Optional rotation in degrees and zIndex.
 export type ElementTransform = {
@@ -59,10 +65,11 @@ export type TextElement = {
 export type Slide = {
   id: string;
   layout: SlideLayout;
-  label: LocalizedText;       // tiny uppercase caption above headline, per locale
+  label: LocalizedText;       // tiny uppercase caption above headline (subtitle below it on banners), per locale
   headline: LocalizedText;    // multi-line; newlines are intentional, per locale
   screenshot: string;         // path relative to the project's asset root — may contain {locale}/{tenant}
   screenshotSecondary?: string; // for two-devices layout — may contain {locale}/{tenant}
+  bannerFrame?: BannerFrame;  // banner layout only; defaults to "phone"
   inverted?: boolean;         // dark background variant
   orientationFilter?: "portrait" | "landscape"; // if set, slide only shows for that orientation
   // Per-element overrides; when present, replaces layout default placement.

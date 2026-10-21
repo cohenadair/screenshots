@@ -122,14 +122,15 @@ function macStarter(): Slide[] {
   ];
 }
 
-function fgStarter(): Slide[] {
+function bannerStarter(): Slide[] {
   return [
     {
       id: nid(),
-      layout: "feature-graphic",
-      label: {},
-      headline: en("Your tagline goes here."),
+      layout: "banner",
+      label: en("A short subtitle goes here."),
+      headline: en("Your headline goes here"),
       screenshot: "",
+      screenshotSecondary: "",
     },
   ];
 }
@@ -150,12 +151,15 @@ export const DEFAULT_PROJECT: ProjectState = {
     ipad: ipadStarter(),
     "android-7": tabletStarter("7"),
     "android-10": tabletStarter("10"),
-    "feature-graphic": fgStarter(),
+    "feature-graphic": bannerStarter(),
+    "app-store-header": bannerStarter(),
+    "app-store-search": bannerStarter(),
     macos: macStarter(),
   },
 };
 
 export function newSlide(layout: Slide["layout"] = "device-bottom"): Slide {
+  if (layout === "banner") return bannerStarter()[0];
   return {
     id: nid(),
     layout,
@@ -167,5 +171,10 @@ export function newSlide(layout: Slide["layout"] = "device-bottom"): Slide {
 
 export function detectPlatform(device: Device): "ios" | "android" | "macos" {
   if (device === "macos") return "macos";
-  return device === "iphone" || device === "ipad" ? "ios" : "android";
+  return device === "iphone" ||
+    device === "ipad" ||
+    device === "app-store-header" ||
+    device === "app-store-search"
+    ? "ios"
+    : "android";
 }

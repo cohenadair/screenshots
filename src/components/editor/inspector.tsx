@@ -24,7 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { LAYOUT_HINT, LAYOUT_LABEL } from "@/lib/constants";
+import { LAYOUT_HINT, LAYOUT_LABEL, isBannerDevice } from "@/lib/constants";
 import { nid } from "@/lib/defaults";
 import {
   isBuiltInElementId,
@@ -34,6 +34,7 @@ import {
 } from "@/lib/elements";
 import { pickText, writeLocalized } from "@/lib/locale";
 import type {
+  BannerFrame,
   BuiltInElementId,
   Device,
   ElementId,
@@ -58,6 +59,12 @@ type Props = {
   onSelectElement: (id: ElementId | null) => void;
 };
 
+const BANNER_FRAME_LABEL: Record<BannerFrame, string> = {
+  phone: "Phone",
+  "tablet-portrait": "Tablet (portrait)",
+  "tablet-landscape": "Tablet (landscape)",
+};
+
 const ELEMENT_LABEL: Record<BuiltInElementId, string> = {
   caption: "Headline",
   device: "Device",
@@ -75,18 +82,21 @@ export function Inspector({
   onChange,
   onSelectElement,
 }: Props) {
-  const isFeatureGraphic = device === "feature-graphic" || slide.layout === "feature-graphic";
+  const bannerDevice = isBannerDevice(device);
+  const isBanner = bannerDevice || slide.layout === "banner";
   const isNoDevice = slide.layout === "no-device";
-  const layoutValue = device === "feature-graphic" ? "feature-graphic" : slide.layout;
+  const hasBackDevice = slide.layout === "two-devices" || isBanner;
+  const layoutValue = bannerDevice ? "banner" : slide.layout;
   const layoutOptions = Object.entries(LAYOUT_LABEL).filter(([layout]) =>
-    device === "feature-graphic" ? layout === "feature-graphic" : layout !== "feature-graphic",
+    bannerDevice ? layout === "banner" : layout !== "banner",
   );
   const localeLabel = slide.label?.[locale] ?? "";
   const localeHeadline = slide.headline?.[locale] ?? "";
   // When the active locale is empty, surface the fallback (typically en) as
   // the placeholder so the user sees what they're translating from.
-  const headlineDefault = isFeatureGraphic ? "Your tagline." : "One idea\nper slide.";
-  const labelPlaceholder = localeLabel ? "FEATURE 01" : pickText(slide.label, locale) || "FEATURE 01";
+  const headlineDefault = isBanner ? "Your headline" : "One idea\nper slide.";
+  const labelDefault = isBanner ? "A short subtitle." : "FEATURE 01";
+  const labelPlaceholder = localeLabel ? labelDefault : pickText(slide.label, locale) || labelDefault;
   const headlinePlaceholder = localeHeadline
     ? headlineDefault
     : pickText(slide.headline, locale) || headlineDefault;
@@ -96,10 +106,10 @@ export function Inspector({
   }
 
   React.useEffect(() => {
-    if (device === "feature-graphic" && slide.layout !== "feature-graphic") {
-      onChange({ layout: "feature-graphic", transforms: undefined, screenshotSecondary: undefined });
+    if (bannerDevice && slide.layout !== "banner") {
+      onChange({ layout: "banner", transforms: undefined });
     }
-  }, [device, onChange, slide.layout]);
+  }, [bannerDevice, onChange, slide.layout]);
 
   return (
     <div className="flex h-full flex-col">
@@ -141,7 +151,7 @@ export function Inspector({
           </Select>
         </div>
 
-        {!isFeatureGraphic && (
+        {!isBanner && (
           <div className="space-y-1.5">
             <Label className="text-xs">Label</Label>
             <Input
@@ -154,7 +164,7 @@ export function Inspector({
 
         <div className="space-y-1.5">
           <div className="flex items-baseline justify-between">
-            <Label className="text-xs">{isFeatureGraphic ? "Tagline" : "Headline"}</Label>
+            <Label className="text-xs">Headline</Label>
             <span className="text-[10px] text-muted-foreground">newline = break</span>
           </div>
           <Textarea
@@ -165,10 +175,45 @@ export function Inspector({
           />
         </div>
 
-        {!isFeatureGraphic && !isNoDevice && (
+        {isBanner && (
+          <div className="space-y-1.5">
+            <Label className="text-xs">Subtitle</Label>
+            <Textarea
+              value={localeLabel}
+              onChange={(e) => setLocaleField("label", e.target.value)}
+              rows={2}
+              placeholder={labelPlaceholder}
+            />
+          </div>
+        )}
+
+        {isBanner && device !== "feature-graphic" && (
+          <div className="space-y-1.5">
+            <Label className="text-xs">Device frame</Label>
+            <Select
+              value={slide.bannerFrame ?? "phone"}
+              onValueChange={(frame) =>
+                onChange({ bannerFrame: frame as BannerFrame, transforms: undefined })
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(BANNER_FRAME_LABEL).map(([frame, label]) => (
+                  <SelectItem key={frame} value={frame}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        {!isNoDevice && (
           <div className="space-y-1.5">
             <Label className="text-xs">
-              {slide.layout === "two-devices" ? "Front device screenshot" : "Screenshot"}
+              {hasBackDevice ? "Front device screenshot" : "Screenshot"}
             </Label>
             <ScreenshotPicker
               label="Primary"
@@ -181,9 +226,11 @@ export function Inspector({
           </div>
         )}
 
-        {slide.layout === "two-devices" && (
+        {hasBackDevice && (
           <div className="space-y-1.5">
-            <Label className="text-xs">Back device screenshot</Label>
+            <Label className="text-xs">
+              {isBanner ? "Back device screenshot (optional)" : "Back device screenshot"}
+            </Label>
             <ScreenshotPicker
               label="Secondary (back layer)"
               value={slide.screenshotSecondary || ""}
@@ -195,21 +242,19 @@ export function Inspector({
           </div>
         )}
 
-        {!isFeatureGraphic && (
-          <ElementTransformControls
-            slide={slide}
-            device={device}
-            orientation={orientation}
-            locale={locale}
-            selectedElementId={selectedElementId}
-            onChange={onChange}
-            onSelectElement={onSelectElement}
-          />
-        )}
+        <ElementTransformControls
+          slide={slide}
+          device={device}
+          orientation={orientation}
+          locale={locale}
+          selectedElementId={selectedElementId}
+          onChange={onChange}
+          onSelectElement={onSelectElement}
+        />
 
-        {isFeatureGraphic && (
+        {isBanner && (
           <p className="rounded-md border bg-muted/40 p-3 text-[11px] leading-relaxed text-muted-foreground">
-            Shows app icon + name + tagline. Drop an icon at <span className="rounded bg-background px-1 py-0.5 font-mono text-[10px] text-foreground">app-icon.png</span> in this project's asset folder (or leave blank — the app initial will be used). Name is set in the toolbar.
+            Drop an icon at <span className="rounded bg-background px-1 py-0.5 font-mono text-[10px] text-foreground">app-icon.png</span> in this project's asset folder (or leave blank — the app initial will be used). Name is set in the toolbar.
           </p>
         )}
       </div>
@@ -236,7 +281,9 @@ function ElementTransformControls({
 }) {
   const present: ElementId[] = ["caption"];
   if (slide.layout !== "no-device") present.push("device");
-  if (slide.layout === "two-devices") present.push("deviceSecondary");
+  if (slide.layout === "two-devices" || (slide.layout === "banner" && slide.screenshotSecondary)) {
+    present.push("deviceSecondary");
+  }
   for (const element of slide.textElements || []) present.push(toTextElementId(element.id));
 
   const transforms = slide.transforms || {};

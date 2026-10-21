@@ -3,6 +3,7 @@ import * as React from "react";
 import { Rnd } from "react-rnd";
 import { RotateCw } from "lucide-react";
 import type {
+  BannerFrame,
   BuiltInElementId,
   Device,
   ElementId,
@@ -14,7 +15,12 @@ import type {
   Theme,
 } from "@/lib/types";
 import {
+  ANDROID_TABLET_L_RATIO,
+  ANDROID_TABLET_P_RATIO,
+  BANNER_SAFE_AREA,
   CANVAS,
+  bannerLayoutBox,
+  bannerUnit,
   IPAD_RATIO,
   MAC_RATIO,
   MK_RATIO,
@@ -26,6 +32,7 @@ import {
   tabletPW,
 } from "@/lib/constants";
 import { toAssetUrl } from "@/lib/assets";
+import { detectPlatform } from "@/lib/defaults";
 import { toTextElementId } from "@/lib/elements";
 import { img } from "@/lib/image-cache";
 import { DEFAULT_LOCALE, pickText, resolveScreenshot } from "@/lib/locale";
@@ -34,6 +41,7 @@ import {
   AndroidTabletL,
   AndroidTabletP,
   IPad,
+  IPadL,
   MacWindow,
   Phone,
 } from "./device-frames";
@@ -60,7 +68,8 @@ function getFrameAspect(device: Device, orientation: Orientation) {
     case "android":     return 9 / 19.5;
     case "ipad":        return IPAD_RATIO;
     case "android-7":
-    case "android-10":  return orientation === "landscape" ? 8 / 5 : 5 / 8;
+    case "android-10":
+      return orientation === "landscape" ? ANDROID_TABLET_L_RATIO : ANDROID_TABLET_P_RATIO;
     case "macos":       return MAC_RATIO;
     default:            return 1;
   }
@@ -89,6 +98,26 @@ export function getFrameForDevice(device: Device, orientation: Orientation): {
     default:
       return { Comp: Phone, widthFn: phoneW, smallWidthFn: phoneWSmall };
   }
+}
+
+// Banner device frames follow the banner's store: Apple frames on App Store
+// assets, Android frames on the Play Store feature graphic.
+function getBannerFrame(device: Device, frame: BannerFrame): { Comp: FrameComp; aspect: number } {
+  const ios = detectPlatform(device) === "ios";
+  switch (frame) {
+    case "tablet-portrait":
+      return ios ? { Comp: IPad, aspect: IPAD_RATIO } : { Comp: AndroidTabletP, aspect: ANDROID_TABLET_P_RATIO };
+    case "tablet-landscape":
+      return ios ? { Comp: IPadL, aspect: 1 / IPAD_RATIO } : { Comp: AndroidTabletL, aspect: ANDROID_TABLET_L_RATIO };
+    default:
+      return ios ? { Comp: Phone, aspect: MK_RATIO } : { Comp: AndroidPhone, aspect: 9 / 19.5 };
+  }
+}
+
+// Play Store feature graphics are too short for tablet frames, so they're
+// always phones; the App Store banners honor the slide's choice.
+export function bannerFrameFor(slide: Slide, device: Device): BannerFrame {
+  return device === "feature-graphic" ? "phone" : slide.bannerFrame ?? "phone";
 }
 
 type EditHandlers = {
@@ -321,6 +350,25 @@ function shade(hex: string, percent: number) {
   return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
 }
 
+function parseHex(hex: string): [number, number, number] {
+  const c = hex.replace("#", "");
+  const num = parseInt(c.length === 3 ? c.split("").map((x) => x + x).join("") : c, 16);
+  return [(num >> 16) & 0xff, (num >> 8) & 0xff, num & 0xff];
+}
+
+// Blend `hex` toward `toward` by `t` (0 = hex, 1 = toward).
+function mix(hex: string, toward: string, t: number) {
+  const a = parseHex(hex);
+  const b = parseHex(toward);
+  const [r, g, bl] = a.map((v, i) => Math.round(v + (b[i] - v) * t));
+  return `#${((r << 16) | (g << 8) | bl).toString(16).padStart(6, "0")}`;
+}
+
+function withAlpha(hex: string, alpha: number) {
+  const [r, g, b] = parseHex(hex);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 // ---------- Decorative blob ----------
 
 function Blob({
@@ -451,11 +499,13 @@ function getDefaultRects(
 
   switch (layout) {
     case "hero":
-      if (device === "ipad") {
+      if (device === "ipad" || (isAndroidTablet(device) && cH > cW)) {
         // Balanced spacing: the space above the text matches the space below
-        // the device, and both are 90% of the text -> device gap. The extra
-        // top tightening offsets the smaller iPad headline, which otherwise
-        // makes the block look low on the canvas.
+        // the device, and both are 90% of the text -> device gap, so the
+        // whole tablet frame shows instead of bleeding off the bottom. The
+        // extra top tightening offsets the smaller iPad headline, which
+        // otherwise makes the block look low on the canvas. Landscape
+        // Android tablets keep the default bleed.
         const textH = estimateCaptionTextHeight(cW, cH, slide, capW, device);
         const gap = Math.max(cH * 0.02, (cH - textH - deviceH) / 2.8);
         const top = gap * 0.9;
@@ -547,9 +597,89 @@ function getDefaultRects(
           height: deviceH,
         },
       };
+    case "banner":
+      return getBannerRects(slide, device, cW, cH, frameAspect);
     default:
       return {};
   }
+}
+
+function isAndroidTablet(device: Device) {
+  return device === "android-7" || device === "android-10";
+}
+
+// Front device width as a fraction of the banner unit, per frame.
+const BANNER_FRONT_W: Record<BannerFrame, number> = {
+  phone: 0.47,
+  "tablet-portrait": 0.6,
+  "tablet-landscape": 0.62,
+};
+
+// Text block on the left, front + back devices on the right, both devices
+// bleeding off the bottom edge. Proportions are measured off the reference
+// 1024×500 feature graphics and applied to the banner's layout box, so every
+// banner shares one composition. Devices anchor to the box's bottom edge, so
+// a taller box (search results) keeps the bleed instead of floating them.
+function getBannerRects(
+  slide: Slide,
+  device: Device,
+  cW: number,
+  cH: number,
+  frameAspect: number,
+): LayoutRects {
+  const box = bannerLayoutBox(device, cW, cH);
+  const unit = bannerUnit(box);
+  const frame = bannerFrameFor(slide, device);
+  const landscape = frame === "tablet-landscape";
+  const frontW = unit * BANNER_FRONT_W[frame];
+  // Landscape tablets overlap more; tall frames step the back device down
+  // and right. The feature graphic also shrinks its back device, while the
+  // App Store banners keep both devices the same size.
+  const apple = device === "app-store-header" || device === "app-store-search";
+  const backW = landscape || apple ? frontW : frontW * 0.77;
+  // App Store banners overlap their same-size devices by 15% of a frame's
+  // width; the feature graphic keeps its reference spacing.
+  const backOffset =
+    frontW * (landscape ? 0.75 : apple ? 0.85 : frame === "phone" ? 0.955 : 0.8);
+  const backStep = unit * (landscape ? 0.16 : 0.14);
+  const frontH = frontW / frameAspect;
+  const backH = backW / frameAspect;
+  // The device pair ends one text-margin in from the right edge, mirroring
+  // the text's left margin, but never crowds the text below half the width.
+  const margin = box.w * 0.056;
+  // Search results' box is too tall for a bottom bleed to look intentional,
+  // so its pair centers on the (vertically centered) text instead. The
+  // header centers just its front device; the back one still bleeds.
+  const pairH = Math.max(frontH, backStep + backH);
+  const front = {
+    x: Math.max(box.x + box.w * 0.5, box.x + box.w - margin - backOffset - backW),
+    y:
+      device === "app-store-search"
+        ? box.y + (box.h - pairH) / 2
+        : device === "app-store-header"
+          ? box.y + (box.h - frontH) / 2
+          : box.y + box.h - unit * (landscape ? 0.86 : 0.884),
+    width: frontW,
+    height: frontH,
+  };
+  const back = {
+    x: front.x + backOffset,
+    y: front.y + backStep,
+    width: backW,
+    height: backH,
+  };
+  const captionX = box.x + margin;
+  return {
+    caption: {
+      x: captionX,
+      y: box.y,
+      width: front.x - captionX - box.w * 0.03,
+      height: box.h,
+      align: "left",
+    },
+    device: front,
+    ...(slide.screenshotSecondary ? { deviceSecondary: back } : {}),
+  };
 }
 
 function rectFor(
@@ -572,6 +702,11 @@ function rectFor(
 
 function getSlideGeometry(slide: Slide, device: Device, orientation: Orientation) {
   const { cW, cH } = getCanvas(device, orientation);
+  if (slide.layout === "banner") {
+    const { Comp: Frame, aspect: frameAspect } = getBannerFrame(device, bannerFrameFor(slide, device));
+    const defaults = getDefaultRects(slide, device, cW, cH, frameAspect, 0, 0);
+    return { cW, cH, Frame, frameAspect, defaults };
+  }
   const { Comp: Frame, widthFn, smallWidthFn } = getFrameForDevice(device, orientation);
   const frameAspect = getFrameAspect(device, orientation);
   const fwFrac = widthFn(cW, cH);
@@ -631,22 +766,6 @@ export function SlideCanvas({
 }: Props) {
   const { cW, cH } = getCanvas(device, orientation);
 
-  if (slide.layout === "feature-graphic" || device === "feature-graphic") {
-    return (
-      <FeatureGraphicCanvas
-        slide={slide}
-        cW={cW}
-        theme={theme}
-        locale={locale}
-        projectId={projectId}
-        appName={appName}
-        appIcon={appIcon}
-        editable={editable}
-        edit={edit}
-      />
-    );
-  }
-
   const handleBackgroundMouseDown = editable
     ? (e: React.MouseEvent<HTMLDivElement>) => {
         if (e.target === e.currentTarget) edit?.onSelectElement?.(null);
@@ -672,6 +791,8 @@ export function SlideCanvas({
         locale={locale}
         projectId={projectId}
         tenant={tenant}
+        appName={appName}
+        appIcon={appIcon}
         editable={editable}
         edit={edit}
         selectedElementId={selectedElementId}
@@ -721,42 +842,6 @@ export function DeckCanvas({
     >
       {slides.map((slide, index) => {
         const screenX = index * cW;
-        const active = activeSlideId === slide.id;
-        if (slide.layout === "feature-graphic" || device === "feature-graphic") {
-          return (
-            <div
-              key={`${slide.id}-feature`}
-              onMouseDown={(e) => {
-                if (!editable || e.defaultPrevented) return;
-                edit?.onSelectScreen?.(slide.id);
-                edit?.onSelectElement?.(null);
-              }}
-              style={{
-                position: "absolute",
-                left: screenX,
-                top: 0,
-                width: cW,
-                height: cH,
-                overflow: "hidden",
-              }}
-            >
-              <FeatureGraphicCanvas
-                slide={slide}
-                cW={cW}
-                theme={theme}
-                locale={locale}
-                projectId={projectId}
-                appName={appName}
-                appIcon={appIcon}
-                editable={editable}
-                edit={{
-                  onHeadlineChange: (v) => edit?.onHeadlineChange?.(slide.id, v),
-                }}
-              />
-              {showGuides && <ScreenGuide cW={cW} cH={cH} index={index} active={active} />}
-            </div>
-          );
-        }
         return (
           <div
             key={`${slide.id}-bg`}
@@ -775,13 +860,11 @@ export function DeckCanvas({
             }}
           >
             <SlideBackground slide={slide} cW={cW} cH={cH} theme={theme} />
-            {showGuides && <ScreenGuide cW={cW} cH={cH} index={index} active={active} />}
           </div>
         );
       })}
 
       {slides.map((slide, index) => {
-        if (slide.layout === "feature-graphic" || device === "feature-graphic") return null;
         const selectedElementId =
           selectedElement?.slideId === slide.id ? selectedElement.elementId : null;
         const perSlideEdit: EditHandlers | undefined = editable
@@ -807,6 +890,8 @@ export function DeckCanvas({
             locale={locale}
             projectId={projectId}
             tenant={tenant}
+            appName={appName}
+            appIcon={appIcon}
             editable={editable}
             edit={perSlideEdit}
             selectedElementId={selectedElementId}
@@ -835,6 +920,27 @@ export function DeckCanvas({
           </div>
         );
       })}
+
+      {/* Editor guides sit above every element so devices can't hide them;
+          pointer events pass through to the elements underneath. */}
+      {showGuides &&
+        slides.map((slide, index) => (
+          <div
+            key={`${slide.id}-guides`}
+            style={{
+              position: "absolute",
+              left: index * cW,
+              top: 0,
+              width: cW,
+              height: cH,
+              zIndex: 1000,
+              pointerEvents: "none",
+            }}
+          >
+            <SafeAreaGuide device={device} cW={cW} />
+            <ScreenGuide cW={cW} cH={cH} index={index} active={activeSlideId === slide.id} />
+          </div>
+        ))}
     </div>
   );
 }
@@ -850,6 +956,9 @@ function SlideBackground({
   cH: number;
   theme: Theme;
 }) {
+  if (slide.layout === "banner") {
+    return <BannerBackground theme={theme} />;
+  }
   const inverted = !!slide.inverted;
   const accent = inverted ? theme.accentAlt ?? theme.accent : theme.accent;
   return (
@@ -916,9 +1025,51 @@ function ScreenGuide({
   );
 }
 
-function FeatureGraphicCanvas({
+// Editor-only outline of a banner's safe area (see BANNER_SAFE_AREA).
+function SafeAreaGuide({ device, cW }: { device: Device; cW: number }) {
+  const safe = BANNER_SAFE_AREA[device];
+  if (!safe) return null;
+  return (
+    <div
+      aria-hidden
+      style={{
+        position: "absolute",
+        left: safe.x,
+        top: safe.y,
+        width: safe.w,
+        height: safe.h,
+        pointerEvents: "none",
+        outline: `${Math.max(2, cW * 0.0012)}px dashed rgba(255, 255, 255, 0.55)`,
+      }}
+    />
+  );
+}
+
+// Dark, accent-tinted base with a soft accent glow from the top right —
+// always dark regardless of the theme's own bg so the white text reads.
+function BannerBackground({ theme }: { theme: Theme }) {
+  const base = mix(theme.accent, "#0A0A0C", 0.87);
+  return (
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        background: [
+          `radial-gradient(60% 100% at 75% 0%, ${withAlpha(theme.accent, 0.32)} 0%, transparent 70%)`,
+          `linear-gradient(135deg, ${base} 0%, ${shade(base, -3)} 100%)`,
+        ].join(", "),
+      }}
+    />
+  );
+}
+
+// Banner text block: icon + app name, headline, then subtitle (the slide's
+// `label`). Sizes scale off the banner's content height, not the canvas.
+function BannerCaption({
   slide,
+  device,
   cW,
+  cH,
   theme,
   locale,
   projectId,
@@ -926,9 +1077,12 @@ function FeatureGraphicCanvas({
   appIcon,
   editable,
   edit,
+  onFocus,
 }: {
   slide: Slide;
+  device: Device;
   cW: number;
+  cH: number;
   theme: Theme;
   locale: string;
   projectId: string;
@@ -936,76 +1090,80 @@ function FeatureGraphicCanvas({
   appIcon?: string;
   editable?: boolean;
   edit?: EditHandlers;
+  onFocus?: () => void;
 }) {
-  const resolvedIcon = toAssetUrl(projectId, appIcon);
-  // Always renders against bgAlt (see `color: theme.fgAlt` below), so the
-  // accent-on-bgAlt variant is the correct one here even though this
-  // component never sees a per-slide `inverted` flag.
-  const accent = theme.accentAlt ?? theme.accent;
+  const unit = bannerUnit(bannerLayoutBox(device, cW, cH));
+  const icon = img(toAssetUrl(projectId, appIcon));
+  const iconSize = unit * 0.1;
   return (
     <div
       style={{
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
         width: "100%",
         height: "100%",
-        position: "relative",
-        overflow: "hidden",
-        background: `linear-gradient(135deg, ${theme.bgAlt} 0%, ${shade(theme.bgAlt, -10)} 50%, ${accent} 200%)`,
-        display: "flex",
-        alignItems: "center",
-        padding: `0 ${cW * 0.06}px`,
-        color: theme.fgAlt,
+        color: "#FFFFFF",
       }}
     >
-      <Blob cW={cW} color={accent} x={70} y={20} size={50} opacity={0.45} />
-      <div style={{ display: "flex", alignItems: "center", gap: cW * 0.03, zIndex: 2 }}>
-        {resolvedIcon && img(resolvedIcon) ? (
+      <div style={{ display: "flex", alignItems: "center", gap: unit * 0.026 }}>
+        {icon ? (
           <img
-            src={img(resolvedIcon)}
+            src={icon}
             alt=""
-            style={{
-              width: cW * 0.13,
-              height: cW * 0.13,
-              borderRadius: cW * 0.022,
-              boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
-            }}
+            style={{ width: iconSize, height: iconSize, borderRadius: "22.5%" }}
             draggable={false}
           />
         ) : (
           <div
             aria-hidden
             style={{
-              width: cW * 0.13,
-              height: cW * 0.13,
-              borderRadius: cW * 0.022,
-              background: `linear-gradient(135deg, ${accent}55, ${accent})`,
+              width: iconSize,
+              height: iconSize,
+              borderRadius: "22.5%",
+              background: theme.accent,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              color: theme.fgAlt,
               fontWeight: 800,
-              fontSize: cW * 0.07,
-              boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
+              fontSize: iconSize * 0.55,
             }}
           >
             {(appName || "A").slice(0, 1).toUpperCase()}
           </div>
         )}
-        <div>
-          <div style={{ fontSize: cW * 0.06, fontWeight: 800, lineHeight: 1.05 }}>{appName || "App"}</div>
-          <EditableText
-            value={pickText(slide.headline, locale)}
-            editable={editable}
-            multiline
-            onChange={edit?.onHeadlineChange}
-            style={{
-              fontSize: cW * 0.028,
-              color: "rgba(255,255,255,0.85)",
-              marginTop: cW * 0.012,
-              lineHeight: 1.25,
-            }}
-          />
-        </div>
+        <div style={{ fontSize: unit * 0.08, fontWeight: 700, lineHeight: 1 }}>{appName || "App"}</div>
       </div>
+      <EditableText
+        value={pickText(slide.headline, locale)}
+        editable={editable}
+        multiline
+        onChange={edit?.onHeadlineChange}
+        onFocus={onFocus}
+        placeholder="Headline goes here"
+        style={{
+          marginTop: unit * 0.054,
+          fontSize: unit * 0.124,
+          fontWeight: 800,
+          lineHeight: 1.04,
+          letterSpacing: "-0.02em",
+        }}
+      />
+      <EditableText
+        value={pickText(slide.label, locale)}
+        editable={editable}
+        multiline
+        onChange={edit?.onLabelChange}
+        onFocus={onFocus}
+        placeholder="Subtitle"
+        style={{
+          marginTop: unit * 0.05,
+          fontSize: unit * 0.058,
+          fontWeight: 500,
+          lineHeight: 1.25,
+          color: mix(theme.accent, "#FFFFFF", 0.7),
+        }}
+      />
     </div>
   );
 }
@@ -1018,6 +1176,8 @@ function SlideElements({
   locale,
   projectId,
   tenant,
+  appName,
+  appIcon,
   editable,
   edit,
   selectedElementId,
@@ -1035,6 +1195,8 @@ function SlideElements({
   locale: string;
   projectId: string;
   tenant?: string;
+  appName?: string;
+  appIcon?: string;
   editable?: boolean;
   edit?: EditHandlers;
   selectedElementId: ElementId | null;
@@ -1069,21 +1231,37 @@ function SlideElements({
     const saved = slide.transforms?.caption;
     const rotation = saved?.rotation ?? 0;
     const zIndex = saved?.zIndex ?? 4;
-    const inner = (
-      <Caption
-        cW={cW}
-        cH={cH}
-        slide={slide}
-        device={device}
-        theme={theme}
-        locale={locale}
-        editable={editable}
-        edit={edit}
-        align={captionRect.align || "center"}
-        inverted={inverted}
-        onFocus={() => edit?.onSelectElement?.("caption")}
-      />
-    );
+    const inner =
+      slide.layout === "banner" ? (
+        <BannerCaption
+          slide={slide}
+          device={device}
+          cW={cW}
+          cH={cH}
+          theme={theme}
+          locale={locale}
+          projectId={projectId}
+          appName={appName}
+          appIcon={appIcon}
+          editable={editable}
+          edit={edit}
+          onFocus={() => edit?.onSelectElement?.("caption")}
+        />
+      ) : (
+        <Caption
+          cW={cW}
+          cH={cH}
+          slide={slide}
+          device={device}
+          theme={theme}
+          locale={locale}
+          editable={editable}
+          edit={edit}
+          align={captionRect.align || "center"}
+          inverted={inverted}
+          onFocus={() => edit?.onSelectElement?.("caption")}
+        />
+      );
     return (
       <Movable
         rect={toGlobal(captionRect)}
@@ -1225,7 +1403,7 @@ function SlideElements({
           "deviceSecondary",
           secondaryRect,
           screenshotSecondary || screenshot,
-          { opacity: 0.85 },
+          slide.layout === "two-devices" ? { opacity: 0.85 } : undefined,
         )}
       {deviceRect && renderDevice("device", deviceRect, screenshot)}
       {renderCaption()}

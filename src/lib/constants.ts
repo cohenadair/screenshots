@@ -8,8 +8,61 @@ export const CANVAS: Record<Device, { w: number; h: number; wL?: number; hL?: nu
   "android-7":   { w: 1200, h: 1920, wL: 1920, hL: 1200 },
   "android-10":  { w: 1600, h: 2560, wL: 2560, hL: 1600 },
   "feature-graphic": { w: 1024, h: 500 },
+  "app-store-header": { w: 3840, h: 1646 },
+  "app-store-search": { w: 3840, h: 2560 },
   macos:         { w: 2880, h: 1800 },
 };
+
+// ---------- Store banners ----------
+// Feature graphic (Google Play) plus App Store Connect's product page header
+// and search results assets. All three share the "banner" layout.
+export const BANNER_DEVICES: Device[] = ["feature-graphic", "app-store-header", "app-store-search"];
+
+export function isBannerDevice(device: Device): boolean {
+  return BANNER_DEVICES.includes(device);
+}
+
+export type BannerBox = { x: number; y: number; w: number; h: number };
+
+// Apple's "artwork safe area" from its downloadable templates — the region
+// that survives every placement's crop, including small featured cards.
+// Third-party measurements, so double-check against App Store Connect's
+// Preview. Editor-only guide; the layout deliberately ignores it (see
+// BANNER_LAYOUT_BOX).
+export const BANNER_SAFE_AREA: Partial<Record<Device, BannerBox>> = {
+  "app-store-header": { x: 1097, y: 493, w: 1646, h: 661 },
+  "app-store-search": { x: 836, y: 765, w: 2168, h: 1030 },
+};
+
+// Region the banner layout is fitted into: full height and the middle 84%
+// of the width, matching the product page's observed iPhone crop (~8% off
+// each side). Featured placements may crop past it. Banners without an
+// entry use the whole canvas.
+export const BANNER_LAYOUT_BOX: Partial<Record<Device, BannerBox>> = {
+  "app-store-header": { x: 307, y: 0, w: 3226, h: 1646 },
+  "app-store-search": { x: 307, y: 0, w: 3226, h: 2560 },
+};
+
+// Aspect ratio of the reference feature graphic the banner proportions
+// were measured on.
+const BANNER_REFERENCE_ASPECT = 1024 / 500;
+
+export function bannerLayoutBox(device: Device, cW: number, cH: number): BannerBox {
+  return BANNER_LAYOUT_BOX[device] ?? { x: 0, y: 0, w: cW, h: cH };
+}
+
+// Size unit for banner text and devices: the height of the largest
+// reference-shaped composition that fits the box, so a squarer box (search
+// results) doesn't blow the text up to its full height.
+export function bannerUnit(box: BannerBox): number {
+  return Math.min(box.h, box.w / BANNER_REFERENCE_ASPECT);
+}
+
+// App Store Connect rejects images with an alpha channel, and PNG exports
+// always carry one — so Apple's banner assets export as JPEG instead.
+export function exportsAsJpeg(device: Device): boolean {
+  return device === "app-store-header" || device === "app-store-search";
+}
 
 // ---------- Export sizes per device ----------
 export type ExportSize = { label: string; w: number; h: number };
@@ -29,6 +82,8 @@ export const EXPORT_SIZES: Record<Device, ExportSize[]> = {
   "android-7":   [{ label: '7" Portrait',    w: 1200, h: 1920 }],
   "android-10":  [{ label: '10" Portrait',   w: 1600, h: 2560 }],
   "feature-graphic": [{ label: "Feature Graphic", w: 1024, h: 500 }],
+  "app-store-header": [{ label: "Header 21:9", w: 3840, h: 1646 }],
+  "app-store-search": [{ label: "Search 3:2", w: 3840, h: 2560 }],
   // Apple App Store Connect: macOS screenshots must be exactly one of these
   // four 16:10 sizes — no arbitrary scaling.
   macos: [
@@ -62,6 +117,13 @@ export const TAB_P_RATIO = 0.667;        // tablet portrait
 export const TAB_L_RATIO = 1.5;          // tablet landscape
 export const IPAD_RATIO  = 0.770;        // iPad
 export const MAC_RATIO   = 16 / 10;      // macOS App Store screenshot
+
+// Android tablet frames: a 5:8 screen (the capture ratio, so nothing is
+// cropped) inside a bezel of equal thickness on all four sides, given as a
+// fraction of the screen's short side.
+export const ANDROID_TABLET_BEZEL = 0.0376;
+export const ANDROID_TABLET_P_RATIO = (1 + 2 * ANDROID_TABLET_BEZEL) / (1.6 + 2 * ANDROID_TABLET_BEZEL);
+export const ANDROID_TABLET_L_RATIO = 1 / ANDROID_TABLET_P_RATIO;
 
 // iPhone mockup screen overlay (pre-measured)
 export const PHONE_SCREEN = {
@@ -187,6 +249,8 @@ export const DEVICE_LABEL: Record<Device, string> = {
   "android-7": 'Android 7" Tablet',
   "android-10": 'Android 10" Tablet',
   "feature-graphic": "Feature Graphic",
+  "app-store-header": "Product Page Header",
+  "app-store-search": "Search Results",
   macos: "Mac",
 };
 
@@ -227,6 +291,16 @@ export const CAPTURE_GUIDE: CaptureGuideEntry[] = [
     resolution: "1024 × 500",
   },
   {
+    device: "app-store-header",
+    source: "Static banner artwork — reuses iPhone/iPad captures",
+    resolution: "3840 × 1646",
+  },
+  {
+    device: "app-store-search",
+    source: "Static banner artwork — reuses iPhone/iPad captures",
+    resolution: "3840 × 2560",
+  },
+  {
     device: "macos",
     source: "Any display, window captured at exactly this size (Retina 1440×900 @2x)",
     resolution: "2880 × 1800",
@@ -241,7 +315,7 @@ export const LAYOUT_LABEL: Record<SlideLayout, string> = {
   "two-devices": "Two devices",
   "no-device": "No device",
   "split-landscape": "Split (landscape)",
-  "feature-graphic": "Feature graphic",
+  banner: "Banner",
 };
 
 // Short description shown under each layout name
@@ -252,5 +326,5 @@ export const LAYOUT_HINT: Record<SlideLayout, string> = {
   "two-devices": "Layered back + front phones",
   "no-device": "Big standalone headline",
   "split-landscape": "Caption left, device right",
-  "feature-graphic": "1024×500 Play Store banner",
+  banner: "Icon, name, headline, and subtitle beside two devices",
 };

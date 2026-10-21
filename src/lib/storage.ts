@@ -69,6 +69,9 @@ function migrateSlide(slide: Slide): Slide {
 
   return {
     ...slide,
+    // "feature-graphic" was the banner layout's name before the App Store
+    // header/search assets started sharing it.
+    layout: (slide.layout as string) === "feature-graphic" ? "banner" : slide.layout,
     label: coerceLocalized(slide.label as unknown),
     headline: coerceLocalized(slide.headline as unknown),
     ...(transforms && Object.keys(transforms).length > 0 ? { transforms } : { transforms: undefined }),
