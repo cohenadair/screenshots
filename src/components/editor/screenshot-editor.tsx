@@ -1,14 +1,14 @@
 "use client";
 import * as React from "react";
 import JSZip from "jszip";
-import { toJpeg, toPng } from "html-to-image";
+import { toCanvas, toPng } from "html-to-image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Toaster, toast } from "sonner";
 import { toAssetUrl } from "@/lib/assets";
 import {
   EXPORT_SIZES,
   LAST_PROJECT_STORAGE_KEY,
-  exportsAsJpeg,
+  exportsOpaquePng,
   getExportSizes,
   hasTheme,
   resolveTheme,
@@ -17,6 +17,7 @@ import {
 import { detectPlatform, nid } from "@/lib/defaults";
 import { isBuiltInElementId, isTextElementId, textElementKey } from "@/lib/elements";
 import { preloadImages } from "@/lib/image-cache";
+import { encodeOpaquePng } from "@/lib/opaque-png";
 import { resolveScreenshot, writeLocalized } from "@/lib/locale";
 import type { ProjectEntry } from "@/lib/projects";
 import { useProject } from "@/lib/storage";
@@ -568,10 +569,11 @@ export function ScreenshotEditor() {
               continue;
             }
             try {
-              const jpeg = exportsAsJpeg(job.device);
-              const dataUrl = await captureSlide(el, cW, cH, size.w, size.h, jpeg);
+              const dataUrl = await captureSlide(
+                el, cW, cH, size.w, size.h, exportsOpaquePng(job.device),
+              );
               const base64 = dataUrl.split(",")[1] || "";
-              const filename = `${String(i + 1).padStart(2, "0")}-${slide.layout}.${jpeg ? "jpg" : "png"}`;
+              const filename = `${String(i + 1).padStart(2, "0")}-${slide.layout}.png`;
               const path = `${platform}/${job.device}/${size.w}x${size.h}/${locale}/${filename}`;
               zip.file(path, base64, { base64: true });
               okCount += 1;
@@ -630,7 +632,7 @@ export function ScreenshotEditor() {
     sourceH: number,
     exportW: number,
     exportH: number,
-    jpeg: boolean,
+    opaque: boolean,
   ) {
     // html-to-image needs the node at (0,0). Let the library scale the source
     // canvas into the requested output dimensions; CSS transforms leave
@@ -681,11 +683,12 @@ export function ScreenshotEditor() {
       // finish loading before the SVG->canvas rasterization runs, and the
       // clone can snapshot blank. Rendering twice and keeping the second
       // result is the documented workaround for this class of bug.
-      const render = jpeg
-        ? () => toJpeg(el, { ...toPngOptions, quality: 0.95 })
-        : () => toPng(el, toPngOptions);
-      await render();
-      return await render();
+      if (opaque) {
+        await toCanvas(el, toPngOptions);
+        return await encodeOpaquePng(await toCanvas(el, toPngOptions));
+      }
+      await toPng(el, toPngOptions);
+      return await toPng(el, toPngOptions);
     } finally {
       el.style.left = prev.left || "-99999px";
       el.style.top = prev.top || "0px";

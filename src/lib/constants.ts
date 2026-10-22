@@ -58,9 +58,10 @@ export function bannerUnit(box: BannerBox): number {
   return Math.min(box.h, box.w / BANNER_REFERENCE_ASPECT);
 }
 
-// App Store Connect rejects images with an alpha channel, and PNG exports
-// always carry one — so Apple's banner assets export as JPEG instead.
-export function exportsAsJpeg(device: Device): boolean {
+// App Store Connect rejects banners with an alpha channel, and its asset
+// library rejects JPEG banners (INVALID_ASSET_FILE_FORMAT) — so Apple's banner
+// assets export as PNGs without an alpha channel (see opaque-png.ts).
+export function exportsOpaquePng(device: Device): boolean {
   return device === "app-store-header" || device === "app-store-search";
 }
 
