@@ -260,6 +260,10 @@ function headlineFontScale(device: Device): number {
   return HEADLINE_FONT_SCALE[device] ?? 1;
 }
 
+// Line height of slide and banner headlines. Below ~1.1, descenders on one
+// line (g, p, y) touch ascenders and dots on the next (i, l, t) in Inter Bold.
+const HEADLINE_LINE_HEIGHT = 1.1;
+
 function Caption({
   cW,
   cH,
@@ -286,7 +290,9 @@ function Caption({
   onFocus?: () => void;
 }) {
   const fg = inverted ? theme.fgAlt : theme.fg;
-  const accent = inverted ? theme.accentAlt ?? theme.accent : theme.accent;
+  const labelColor = inverted
+    ? theme.labelAlt ?? theme.accentAlt ?? theme.accent
+    : theme.label ?? theme.accent;
   // Scale typography off the *shorter* dimension so landscape layouts don't
   // produce headlines so tall they overlap the device frame.
   const unit = Math.min(cW, cH);
@@ -303,7 +309,7 @@ function Caption({
           fontSize: unit * 0.028,
           fontWeight: 600,
           letterSpacing: unit * 0.0015,
-          color: accent,
+          color: labelColor,
           textTransform: "uppercase",
           marginBottom: unit * 0.018,
           minHeight: unit * 0.03,
@@ -319,7 +325,7 @@ function Caption({
         style={{
           fontSize: headlineFontSize,
           fontWeight: 700,
-          lineHeight: 0.96,
+          lineHeight: HEADLINE_LINE_HEIGHT,
           letterSpacing: -unit * 0.001,
           color: fg,
         }}
@@ -476,7 +482,7 @@ function estimateCaptionTextHeight(
   const headlineFontSize = unit * 0.092 * headlineFontScale(device);
   const lines = countHeadlineLines(headline, headlineFontSize, maxTextWidth);
   const labelBlock = unit * 0.028 * 1.2 + unit * 0.018; // font line-height + marginBottom
-  const headlineBlock = lines * headlineFontSize * 0.96; // fontSize * lineHeight, per line
+  const headlineBlock = lines * headlineFontSize * HEADLINE_LINE_HEIGHT;
   return labelBlock + headlineBlock;
 }
 
@@ -1145,7 +1151,7 @@ function BannerCaption({
           marginTop: unit * 0.054,
           fontSize: unit * 0.124,
           fontWeight: 800,
-          lineHeight: 1.04,
+          lineHeight: HEADLINE_LINE_HEIGHT,
           letterSpacing: "-0.02em",
         }}
       />

@@ -97,6 +97,11 @@ export type Theme = {
   // that's not possible, e.g. a monochrome theme whose "accent" is really
   // just white/black and needs to flip with the background.
   accentAlt?: string;
+  // Small caps label above the headline, on bg / bgAlt. Optional — defaults
+  // to accent / accentAlt. Set these when the accent works for blobs and
+  // banners but is too light to read as small text.
+  label?: string;
+  labelAlt?: string;
   muted: string;
 };
 
