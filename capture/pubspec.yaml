@@ -1,0 +1,22 @@
+name: screenshots_capture
+description: >
+  Captures App Store / Google Play screenshots of a Flutter app on iOS
+  simulators and Android emulators, for the screenshots studio.
+publish_to: none
+
+environment:
+  sdk: ^3.10.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+  path_provider: ^2.0.11                                # https://pub.dev/packages/path_provider (Flutter)
+  timezone: ^0.10.0                                     # https://pub.dev/packages/timezone (Dart)
+  uuid: ^4.1.1                                          # https://pub.dev/packages/uuid (Dart)
+
+dev_dependencies:
+  flutter_lints: ^3.0.1                                 # https://pub.dev/packages/flutter_lints (Flutter)

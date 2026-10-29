@@ -3,25 +3,25 @@
     {
       "id": "activity-log",
       "name": "Activity Log",
-      "root": "../activity-log/screenshots-assets",
+      "root": "../../activity-log/screenshots/assets",
       "defaultDevice": "iphone"
     },
     {
       "id": "anglers-log",
       "name": "Anglers' Log",
-      "root": "../anglers-log/screenshots-assets",
+      "root": "../../anglers-log/screenshots/assets",
       "defaultDevice": "iphone"
     },
     {
       "id": "pro-iq",
       "name": "Pro IQ",
-      "root": "../pro-iq/screenshots-assets",
+      "root": "../../pro-iq/screenshots/assets",
       "defaultDevice": "iphone"
     },
     {
       "id": "tapd",
       "name": "Tapd",
-      "root": "../tapd/screenshots-assets",
+      "root": "../../tapd/screenshots/assets",
       "defaultDevice": "iphone"
     }
   ]

@@ -1,0 +1,9 @@
+{
+  "projects": [
+    {
+      "id": "anglers-log",
+      "name": "Anglers' Log",
+      "config": "../../anglers-log/screenshots/capture/capture.json"
+    }
+  ]
+}
