@@ -255,6 +255,8 @@ const HEADLINE_FONT_SCALE: Partial<Record<Device, number>> = {
   ipad: 0.75,
   macos: 0.6,
   android: 0.75,
+  "android-7": 0.75,
+  "android-10": 0.75,
 };
 function headlineFontScale(device: Device): number {
   return HEADLINE_FONT_SCALE[device] ?? 1;
@@ -505,13 +507,12 @@ function getDefaultRects(
 
   switch (layout) {
     case "hero":
-      if (device === "ipad" || (isAndroidTablet(device) && cH > cW)) {
+      if (device === "ipad" || isAndroidTablet(device)) {
         // Balanced spacing: the space above the text matches the space below
         // the device, and both are 90% of the text -> device gap, so the
         // whole tablet frame shows instead of bleeding off the bottom. The
-        // extra top tightening offsets the smaller iPad headline, which
-        // otherwise makes the block look low on the canvas. Landscape
-        // Android tablets keep the default bleed.
+        // extra top tightening offsets the smaller tablet headline, which
+        // otherwise makes the block look low on the canvas.
         const textH = estimateCaptionTextHeight(cW, cH, slide, capW, device);
         const gap = Math.max(cH * 0.02, (cH - textH - deviceH) / 2.8);
         const top = gap * 0.9;
