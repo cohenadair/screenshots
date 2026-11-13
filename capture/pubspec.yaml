@@ -14,6 +14,7 @@ dependencies:
     sdk: flutter
   integration_test:
     sdk: flutter
+  material_ui: ^1.11.0
   path_provider: ^2.0.11                                # https://pub.dev/packages/path_provider (Flutter)
   timezone: ^0.10.0                                     # https://pub.dev/packages/timezone (Dart)
   uuid: ^4.1.1                                          # https://pub.dev/packages/uuid (Dart)
